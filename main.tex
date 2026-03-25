@@ -1,0 +1,801 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1.25in]{geometry}
+\usepackage{amsmath, amsfonts, amssymb}
+\usepackage[dvipsnames]{xcolor}
+\definecolor{niceblue}{HTML}{236899}
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    filecolor=black,
+    urlcolor=niceblue,
+    citecolor=niceblue,
+    linkbordercolor = white
+}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{amsbsy}
+\usepackage{epsfig}
+\usepackage{bm}
+\usepackage{xspace}
+\usepackage{color}
+\usepackage{lineno}
+\usepackage{ragged2e}
+\usepackage{comment}
+\usepackage{multirow}
+\usepackage{titling}
+
+% Linux Libertine:
+\usepackage{textcomp}
+\usepackage[sb]{libertine}
+\usepackage[varqu,varl]{inconsolata}% sans serif typewriter
+\usepackage[libertine,bigdelims,vvarbb]{newtxmath} % bb from STIX
+\usepackage[cal=boondoxo]{mathalfa} % mathcal
+\useosf % osf for texb, not math
+% \usepackage[supstfm=libertinesups,%
+%   supscaled=1.2,%
+%   raised=-.13em]{superiors}
+\usepackage{setspace}
+
+\widowpenalty10000
+\clubpenalty10000
+
+\definecolor{darkgrey}{HTML}{A9A9A9}
+\renewcommand\linenumberfont{\normalfont\bfseries\small\color{darkgrey}}
+\modulolinenumbers[2]
+
+\usepackage{booktabs}
+\usepackage[round]{natbib}
+\bibliographystyle{icesjms}
+\bibpunct{(}{)}{,}{a}{}{,}
+\usepackage{authblk}
+\usepackage{pdflscape}
+\usepackage{setspace}
+
+\newcommand{\pe}[1]{{\color{blue}#1}}
+\newcommand{\sa}[1]{{\color{red}#1}}
+\newcommand{\ld}[1]{{\color{violet}#1}}
+
+\newcommand{\rev}[1]{{\color{niceblue} #1}}
+\newcommand{\R}[1]{\label{#1}\linelabel{#1}}
+% \newcommand{\lr}[1]{page~\pageref{#1}, line~\lineref{#1}}
+\newcommand{\lr}[1]{line~\lineref{#1}}
+
+\date{}
+
+\title{Beyond Laplace approximation: marginalization of discrete latent states using R Template Model Builder}
+
+\author[1*]{Christopher L. Cahill}
+\author[2]{James T. Thorson}
+\author[3]{Kasper Kristensen}
+
+\affil[1]{Quantitative Fisheries Center, Department of Fisheries and Wildlife, Michigan State University, East Lansing, Michigan, 48824}
+\affil[2]{National Oceanic and Atmospheric Administration, Alaska Fisheries Science Center, 7600 Sand Point Way NE, Seattle, Washington, 98275}
+\affil[3]{Technical University of Denmark, Charlottenlund Slot Jægersborg Allé 1, 2920 Charlottenlund}
+\affil[*]{corresponding author: cahill11@msu.edu}
+
+\linenumbers
+% \doublespacing
+\onehalfspacing
+\begin{document}
+% \begin{spacing}{1.2}
+\maketitle
+
+\begin{abstract}
+Fancy words here
+
+\end{abstract}
+    
+Keywords: generalized gamma distribution, gamma distribution, lognormal distribution, index standardization, generalized linear model
+
+\section{Introduction}
+
+A primary challenge of fisheries research is the accurate and precise estimation of fish population characteristics (e.g., population size and variance) for inclusion in assessments of fish stocks, habitat, and the status of marine ecosystems. 
+Regression models provide researchers with a versatile tool for fitting predictions to various data sources (e.g., observations from fisheries-independent surveys), but these models depend on the skill of the researcher to specify the ``best'' probability distribution for the data. 
+We define ``best'' as a distribution with the fewest parameters (to avoid overfitting) that conforms to current understanding of a fish population and that fits observed data well over its range (i.e., residuals are small and homoscedastic). 
+\R{A4}The selection of different probability distributions may lead to sizable differences in the estimation of the scale of a fish population \citep{thorson2021scale}. 
+While fisheries researchers commonly apply the lognormal or gamma distributions to model variables observed with a continuous positive response \citep{maunder2004}, distributions with more than two parameters may be overlooked or ignored.
+
+\subsection{Introducing the generalized gamma distribution}
+
+The generalized gamma distribution (GGD) is a three-parameter distribution that provides several flexibilities for modelling fisheries data.
+\citet{amoroso1925} described a continuous function with four parameters to analyze the distribution of income data. 
+The Amoroso distribution has four parameters (a location parameter, scale parameter, and two shape parameters) and includes special cases for several useful distributions, such as the lognormal and gamma distributions \citep{crooks2019FieldGuide}, which are commonly used by fisheries researchers.
+\citet{stacy1962} removed the location parameter from the Amoroso distribution and described a generalization of the gamma distribution with three parameters, which also includes the special case for the lognormal distribution.
+While the properties of the Amoroso and Stacy parameterizations are useful for biological analyses, the parameterization in \citet{stacy1962} does not lend itself to maximum likelihood estimation (MLE) methods \citep{prentice1974}.
+\citet{prentice1974} applied two transformations to the \citet{stacy1962} parameterization: a transformation of shape parameter $k$ into a new parameter $Q$ ($Q = 1/\sqrt{k}$) and a log transformation of the probability density function (PDF).
+This parameterization improves numerical stability when estimating $Q \to 0$ and allows for $Q < 0$ \citep{jackson2016flexsurv}.
+
+As of the writing of this paper, the generalized gamma distribution has previously been implemented in \textsf{R} packages flexsurv \citep{jackson2016flexsurv}, ggamma \citep{saldanha2019ggamma}, and gamlss \citep{rigby2005gamlss} and in the Python library SciPy \citep{2020SciPy}, making the VAST \citep{thorson2019vast} and sdmTMB \citep{anderson2024sdmTMB} \textsf{R} package implementations described in this paper the first to include this distribution for fisheries analysis.
+
+\subsection{Fisheries applications}\label{fisheries-applications}
+
+Because the GGD has three parameters, it provides more flexibility in fitting fisheries data than the more commonly used lognormal or gamma distributions. 
+\R{A5}This is advantageous if the reduction in estimation error offsets the increase in model complexity and the potential rise in generalization error.
+Fisheries researchers may select the GGD for model-based estimates (including spatial, temporal, or spatiotemporal models) of the mean and variance of biomass or abundance of fish species, to standardize indices of abundance, or to specify error distributions in fish stock assessments.
+Another benefit of the GGD is that MLE methods are able to estimate distribution parameters for lognormal and gamma distributions, neither of which have special cases for the other.
+
+\R{B1}Abundance and biomass data often contain zeros, which can be fit using two-part models \citep[``hurdle'' or ``delta'' models; ][]{aitchison1955, maunder2004} that include two linear predictors: one to model the encounters vs.\ non-encounters and a distribution such as the lognormal, gamma, or GGD to model positive catch rates or densities.
+An additional method to handle positive continuous data that contains zeros is to use a compound Poisson-gamma distribution or Tweedie distribution \citep{tweedie1984, foster2013}, where the compound Poisson-gamma is the Tweedie with its power parameter $1 < p < 2$.
+The Tweedie distribution has three distribution parameters and uses a single linear predictor to model both zero and positive continuous values, which reduces the number of parameters relative to a delta model but also reduces model flexibility.
+
+Here, we compare the performance of models that use the lognormal, gamma, Tweedie, and GGD in (1) a simulation experiment and (2) when applied to time series of observations of effort-standardized catch (i.e., catch per unit effort, hereafter CPUE) from fishery-independent surveys in the Gulf of Alaska and off the coast of British Columbia, Canada.
+By demonstrating the efficiency of the GGD and its ability to represent both the lognormal and gamma distributions, we propose that fisheries researchers explore using the GGD for modelling fish populations.
+
+\section{Methods}
+
+\subsection{GGD parameterization}
+
+We used a mean-CV form of the \citet{prentice1974} GGD parameterization, where we use the mean ($\bar{x}$) instead of location ($\mu$) (Table \ref{tab:table1}). 
+Internally, the generalized linear model linear predictor $\eta$ (i.e., $\log(\bar{x})$) is converted into $\log(\mu)$ as
+\begin{equation}
+\log(\mu) = \eta - \log \Gamma \left(\frac{k \beta+1}{\beta} \right) + \log \Gamma(k) + \frac{\log(k)}{\beta},
+\end{equation}
+\noindent
+where $k = Q^{-2}$, $\beta = Q / \sigma$, and $\log \Gamma$ is the log gamma function.
+Special cases of the GGD are that it reduces to the lognormal distribution when \(Q \to 0\) (Figure~\ref{fig:compare-dists}b,e,h) and it reduces to the gamma distribution when $\sigma = Q$ (e.g., Figure~\ref{fig:compare-dists}f).
+Thus, with the addition of one parameter, relative to the lognormal or gamma distributions, the GGD can model either distribution, a distribution in between the two, a distribution with lighter tails than the gamma, or a distribution with heavier tails than the lognormal. 
+An additional special case for the GGD is the Weibull distribution when \(Q = 1\) (Figure~\ref{fig:compare-dists}c,f,i).
+Finally, the coefficient of variation for the GGD is a function of the $\sigma$ and $Q$ parameters, unrelated to $\bar{x}$ (Table \ref{tab:table1}).
+
+\subsection{Simulation testing}
+
+We assess the relative performance and robustness of the GGD to estimate biomass density across different observation error types. 
+In a factorial-simulation experiment, we examine the goodness-of-fit, bias in estimates, and predictive accuracy of the GGD, lognormal, gamma, and Tweedie families. 
+The Tweedie family is not a special case of the GGD but we have included it in our analyses because it is widely used in fisheries applications \citep[e.g.,][]{shono2008, foster2013, anderson2019synopsis} and produces index scale estimates that are similar to design-based indices \citep{thorson2021scale}. 
+
+Using sdmTMB, we simulated 10,000 points across a 100 $\times$ 100 cell grid using a spatial model of the form: 
+\begin{equation} \label{cross-sim-eqn}
+\begin{aligned}
+\mathbb{E}[y_{\bm{s}}] &= \mu_{\bm{s}},\\
+\mu_{\bm{s}} &=
+g^{-1} \left(\alpha + \omega_{\bm{s}} \right),\\
+\bm{\omega} &\sim \operatorname{MVNormal} \left( \bm{0}, \bm{{\Sigma}}_\omega \right),
+\end{aligned}
+\end{equation}
+\noindent
+where the expected value $\mathbb{E}[y_{\bm{s}}]$, of catch $y_{\bm{s}}$ at spatial coordinates $\bm{s}$ is the mean at that point in space, given by $\mu_{\bm{s}}$. The mean is equal to an inverse link function $g^{-1}$ applied to the observed catch $\alpha$ plus a spatial Gaussian Markov random field (GMRF) value $\omega_{\bm{s}}$. 
+\R{A7cross}The Gaussian Markov Random Field is structured with a covariance (inverse precision) matrix $\bm{{\Sigma}}_\omega$ that approximates the Mat\'ern correlation function with a marginal standard deviation of 1 and range \citep[distance at which correlation decays to $\approx$ 0.13;][]{lindgrenExplicitLink2011} of 0.5.
+From the simulated expected values, we sampled observations for 500 locations and added observations errors from one of our four families. 
+
+Our four families used either the Tweedie distribution with a single linear predictor or delta-models, which had two linear predictors.
+We used a Tweedie distribution with a power parameter $p = 1.5$.
+For the delta-models, we simulated encounters (mean encounter probability = 0.5), using a Bernoulli distribution and a logit link. 
+The positive catch rates (mean catch rate = 1) for the delta-models were sampled from one of gamma, lognormal, or the generalized gamma distribution.
+We standardized the scale parameter of each observation error distribution so that the CV of the observation error was 0.95, which was similar to the mean CV observed across species in the multi-stock analysis.
+We also included a sequence of values of $Q$ values ($Q$ = -2, -1, -0.5, -0.001, 0.001, 0.5, 0.95, 1, 2) to assess the families against data with a range of heavy to light tails, to assess the ability for the GGD models to estimate $Q$, and illustrate the equivalence of the GGD to the lognormal at $Q = 0$ and to the gamma when $Q = \sigma$ (here at $Q = 0.95$).
+
+We then fit the model specified in equation \ref{cross-sim-eqn} to each simulated dataset using the delta-GGD, delta-lognormal, delta-gamma, and Tweedie families.
+Using these model fits, we summed density predictions across a prediction grid to generate an area-weighted biomass index \citep[e.g.,][]{thorson2015geo}, using a generic bias-correction estimator \citep{thorson2016bias}. 
+We repeated this sampling, model fitting, and index calculation 1,000 times, each time generating a new GMRF, new sampling locations, and new observation errors.
+For each simulation iteration, we calculated the relative error (RE) of the predicted index value ($\hat{I}$) compared to the true index ($I_\mathrm{true}$), $\mathrm{RE} = \left(\hat{I} - I_\mathrm{true}\right) / I_\mathrm{true}$, and calculated the marginal AIC \citep[Akaike Information Criterion;][]{akaike1973} weight. 
+These AIC weights \citep{burnham2002} can be calculated as
+\begin{equation}
+\begin{aligned}
+\text{AIC}_i &= -2 \log(L_i) + 2K_i, \\
+\Delta_i &= \text{AIC}_i - \text{AIC}_{\min}, \\
+w_i &= \frac{\exp\left(-\frac{1}{2} \Delta_i\right)}{\sum_{r=1}^{R} \exp\left(-\frac{1}{2} \Delta_r\right)}, \\
+\label{eq:aic-w}
+\end{aligned}
+\end{equation}
+\noindent
+where 
+$\log(L_i)$ is the marginal (natural) log likelihood for model $i$, $K_i$ is the number of fixed effect parameters, and $\Delta_i$ is the difference between the AIC for model $i$ and the model with the minimum AIC.
+In the denominator, those differences are summed over all $R$ candidate models.
+
+To illustrate goodness of fit in the tails of the distributions, we performed an additional single simulation with an increased sample size.
+We simulated observations at 2,000 points, fit each of the four models, and then calculated randomized quantile residuals \citep{dunnRandomizedQuantile1996} for the full dataset (Tweedie) or the positive linear predictor (all other families) making sure to sample random effects from their approximate (multivariate normal) distribution rather than use their empirical Bayes estimates \citep{waagepetersen2006, thorson2024book}.
+
+\subsection{Multi-stock analysis}\label{multi-stock-methods}
+
+We compared the performance of the GGD relative to the lognormal, gamma, and Tweedie when applied to trawl survey data from the Gulf of Alaska and off the coast of British Columbia, Canada. 
+We fit models to 14 species from three regions: the Gulf of Alaska (GOA), Hecate Strait and Queen Charlotte Sound (HS-QCS), and West Coast Vancouver Island (WCVI).
+These species occurred in each of the three regions and were also well-sampled in the HS-QCS and WCVI regions, meaning they were encountered in at least 20\% of samples over time.
+We used this encounter cutoff for the HS-QCS and WCVI regions because they have much smaller spatial coverage and lower annual data availability than the GOA (Figure \ref{fig:sampling-diff-supp}).
+\R{B3}In the GOA, even with a low encounter rate (e.g., Spotted Ratfish $\sim7$\%, 49 encounters/year), the mean annual number of encounters can be comparable to a species that has a much higher encounter rate in a smaller region like WCVI (e.g., Walleye Pollock $\sim37$\%, 44 encounters/year; Table \ref{tab:encounter-rates}).
+Time series spanned 18--20 years in BC survey regions (10--12 sampled years) and 30--33 years (15 sampled years) in the Gulf of Alaska. 
+For the HS-QCS and WCVI surveys, we used a SPDE mesh with a ``cutoff'' (minimum triangle edge length) of 8 km \citep{fmesher}, and for the GOA surveys we used a cutoff value that resulted in a mesh with 500 knots ($\approx$ 26.5 km). 
+We fit the following model for each family, with a constant spatial GMRF and independent GMRFs by year as: 
+\begin{equation}
+\begin{aligned}
+\mu_{\bm{s},t} &=
+g^{-1} \left(\alpha_t + O_{\bm{s},t} + \omega_{\bm{s}} + \epsilon_{\bm{s},t} \right),\\
+\bm{\omega} &\sim \operatorname{MVNormal} \left( \bm{0}, \bm{{\Sigma}}_\omega \right),\\
+\bm{\epsilon}_{t} &\sim \operatorname{MVNormal} (\bm{0}, \bm{{\Sigma}}_{\epsilon}),
+\label{eq:stocks}
+\end{aligned}
+\end{equation}
+\noindent
+where the expected mean $\mu_{\bm{s},t}$ at spatial coordinates $\bm{s}$ at time (year) $t$, is equal to an inverse link function $g^{-1}$ applied to the linear combination of an annual intercept $\alpha_t$, offset $O_{\bm{s},t}$ for log area swept (for the Tweedie or delta-model second linear predictors), 
+and spatial ($\omega_{\bm{s}}$) and spatiotemporal ($\epsilon_{\bm{s},t}$) random effects values.
+\R{A7multi}The $\bm{\omega}$ and $\bm{\epsilon}$ random effect vectors are drawn from GMRFs with covariance (inverse precision) matrices $\bm{{\Sigma}}_\omega$ and $\bm{{\Sigma}}_\epsilon$ structured to approximate a Mat\'ern correlation function while estimating a shared decorrelation rate $\kappa$ and independent precision-per-distance parameters $\tau_\omega$ and $\tau_\epsilon$.
+The shared Mat\'ern range $\rho$ can be calculated as $\sqrt{8}/\kappa$ \citep{lindgrenExplicitLink2011}.
+
+As in the simulation experiment, we fit the models as either a single linear predictor and the Tweedie distribution or a delta-model that had two linear predictors (one predicting encounter probability and one predicting catch conditional on encounter) for the lognormal, gamma, and GGD distributions. 
+We considered models to have converged if the maximum absolute marginal log-likelihood gradient with respect to all fixed effect parameters was $< 0.005$, the Hessian was positive definite, no random field marginal standard deviations were on a boundary (defined as $< 0.01$), and the mean coefficient of variation in the estimated index was $< 1$.
+If the model failed to converge, we checked if any of the spatial or spatiotemporal random fields had collapsed to zero (i.e., the marginal field SD $< 0.01$), and if they had, we omitted those random fields (set to zero) and refit the model.
+In three cases where the delta-GGD model did not converge, we refit the models in two ways: we tested the use of a weak \R{A11}penalty that constrained the year estimates, where $\alpha_{t} \sim \operatorname{N}(0, 30^{2})$ or we scaled the catch variable by 0.01 kg because the estimation of the GGD may be sensitive to scale and/or the starting values used for $\sigma$.
+We include these results in the Supplementary Materials (see GGD Model Convergence) to offer readers practical options for troubleshooting convergence issues when fitting the GGD model.
+
+We compared the models using two metrics: AIC and cross validation.
+First, we calculated marginal AIC weights ($w_i$) across all of the fitted models for each stock.
+\R{A1}Second, we compared the models with 50-fold cross validation.
+We divided the data randomly into 50 folds: $D_1, D_2, \dots, D_{50}$.
+Then, for each fold $j$ (where $j = 1, \dots, 50 $) we
+trained the model on the data excluding $D_j$ and evaluated the model by calculating the sum of the log likelihood of the out-of-sample data $D_j$.
+We then compared the relative differences in these log likelihoods between families for each stock.
+
+\R{A9B2}For each stock, we compared the estimated biomass indices across the four models. We chose three example species from the Gulf of Alaska that spanned a range of $Q$ values (Arrowtooth Flounder, Pacific Ocean Perch, and Pacific Spiny Dogfish) to illustrate in the main text and provide comparisons for all other stock combinations in the Supplementary Materials.
+
+\section{Results}
+
+\subsection{Simulation testing}\label{simulation-results}
+
+The GGD (``gengamma'' in figures following the \textsf{R} family function name) performed well across the simulated datasets. 
+Randomized quantile residuals (RQR) from the models fitted with the GGD had residuals consistent with the expected distribution across the simulations from different distributions (Figure~\ref{fig:cross-sim-qq}). 
+The Tweedie distribution also performed well across most of the simulated datasets in terms of the RQR, though it did not perform as well as the GGD when $Q < 0$ (i.e., data that were heavier tailed than the lognormal; Figure~\ref{fig:cross-sim-rqr-supp}). 
+Similarly, the gamma distribution performed poorly when $Q < 0$, failing to generate residuals consistent with the model expectations at both the upper and lower tails.
+As expected, residuals from models using the lognormal family (Figure~\ref{fig:cross-sim-qq}) indicated over prediction of large values as the tails of the simulated data became lighter. 
+For very heavy tails ($Q < -0.5$) the GGD had better residual diagnostics than the lognormal.
+
+
+
+The GGD produced unbiased estimates of biomass density, had high accuracy for predicting biomass density, and had reliable confidence interval (CI) coverage across different observation error types. 
+The GGD, gamma, and Tweedie families had median relative errors near zero, indicating that indices were not biased regardless of the simulation families used (Figure~\ref{fig:cross-sim-re-aicw}a).
+Only the lognormal family had a large relative error when fit to data simulated from $Q > 0$ or the Tweedie distribution (Figure~\ref{fig:cross-sim-re-aicw}a). 
+As the simulated data became lighter-tailed (i.e., as $Q$ increased), the mean estimated by the lognormal increased relative to the true mean.
+
+The predictive accuracy of the GGD was robust to the underlying observation process (Figure~\ref{fig:cross-sim-re-aicw}b). 
+Across values of $Q$ the GGD had the highest AIC weights, except for the special cases where $Q \to 0$ and $Q = \sigma$ (Figure~\ref{fig:cross-sim-aicw-supp}).
+The lognormal ($Q \to 0$) and gamma ($Q = \sigma$) families had the highest AIC weights when fit to their matching simulated data, however the GGD model had median AIC weights of $\approx 31$\% (Figure~\ref{fig:cross-sim-re-aicw}), which is close to the value $\approx 27 \% = \frac{e^{-1}}{1 + e^{-1}}$ that is expected when the generalized gamma results in the same marginal likelihood as the corresponding model but has a $\Delta$ AIC that is larger by two units due to the additional parameter $Q$. 
+
+\R{A2}Overall, the GGD had 50\% CI coverage that was comparable to or better than the other families, except in the case where the data were simulated using the Tweedie distribution, where the GGD had under-coverage ($\approx 37$\%; Figure~\ref{fig:cross-sim-aicw-supp}c).
+When the simulated data was heavy-tailed ($Q = -1$) the GGD was the only distribution with the expected CI coverage, whereas the other families showed under-coverage. 
+Coverage for models fitted with the lognormal had under-coverage when tails were lighter, which reflects the increase in relative error seen in Figure~\ref{fig:cross-sim-aicw-supp}a.
+
+\subsection{Multi-stock analysis}\label{multi-stock-results}
+
+Across most species in each region, the delta-GGD was selected as the best or close to best model by AIC (Figure~\ref{fig:multi-stock-aic}).
+When $Q \to 0$ the AIC weight was split between the lognormal and GGD models, which matches the results of the simulation testing.
+At higher values of $Q$, in some species (e.g., Shortspine Thornyhead, Arrowtooth Flounder) the AIC weight was split between the gamma and GGD. 
+This happened where the difference between $\sigma$ and the estimated Q was smallest, and in the HS-QCS and WCVI regions, which were less data-rich than the GOA (Figure \ref{fig:sampling-diff-supp}). 
+\R{A1results}Cross validation results within the GOA usually, but not always, selected the same model as AIC; eight out of 12 species had the highest out-of-sample log likelihood with the GGD (Figure \ref{fig:multi-stock-aic}).
+Predictive performance was most similar between the lognormal and the GGD near Q = $0$ when the distributions are equivalent.
+% For the smaller HS-QCS and WCVI surveys, cross validation indicated that the lognormal was often indistinguishable from the GGD (Figure \ref{fig:multi-stock-aic}).
+In the smaller British Columbia surveys, the GGD was less dominant in predictive performance, but was the best or within 10 units of log likelihood from the best family in $\approx$ 56\% of survey-species combinations (Figure \ref{fig:multi-stock-aic}).
+
+Three illustrative examples of spatiotemporal-model-derived area-weighted indices of biomass from the GOA (Arrowtooth Flounder, Pacific Ocean Perch, and Pacific Spiny Dogfish) show that the GGD performed as expected, i.e., resembling the gamma or lognormal distributions depending upon the estimated value for $Q$.
+When the estimated $Q$ was high, the index estimated by the delta-GGD model tended to better match the delta-gamma model (e.g., Arrowtooth Flounder in Figure~\ref{fig:multi-stock-examples}). 
+As $Q$ approached $0$, the index estimated by the GGD model became similar in trend and magnitude as the index estimated by the delta-lognormal model (Figures~\ref{fig:multi-stock-examples}, \ref{fig:index-goa-supp}, \ref{fig:index-hs-qcs-supp}, \ref{fig:index-wcvi-supp}).
+The scale estimated by the GGD was similar to the design-based scale for Arrowtooth Flounder (Table \ref{tab:model-design-ratio}). 
+However, for Pacific Ocean Perch and Pacific Spiny Dogfish, although the GGD had the highest AIC weight, the scale of the delta-gamma was closer to the design-based index (Table \ref{tab:model-design-ratio}).
+\R{A9B2Results}Results for all other survey-species combinations are shown in Figures \ref{fig:index-goa-supp}--\ref{fig:index-wcvi-supp}.
+
+\section{Discussion}
+
+We present a parameterization of the GGD in terms of the mean and coefficient of variation that allows its incorporation into existing software for spatiotemporal modelling. 
+In a simulation experiment, the GGD demonstrated robust performance against distribution misspecification, and when tested across 14 species in three regions, the GGD had the highest or close to the highest AIC weight in most cases. 
+% Cross validation favoured the GGD in most (75\%) of cases for the more data-rich GOA region but was less clear for the British Columbia surveys.
+Compared to other commonly used distributions (e.g., lognormal, gamma, Tweedie), the GGD offers a flexible alternative for fitting fisheries-independent survey observations.
+
+Across a range of simulated $Q$ values, and when fit to data simulated from other distributions, the GGD performed as expected in the simulation analysis.
+The GGD closely resembled the lognormal distribution for lognormal-simulated data and the gamma distribution for gamma-simulated data. 
+In contrast, bias increased as simulated $Q$ increased (tails became lighter than lognormal) when the lognormal distribution was fitted.
+The GGD offers greater flexibility by fitting the lognormal distribution when appropriate but avoiding the bias seen with the lognormal model as tail behaviour diverges from lognormal.
+Moreover, the GGD's ability to estimate distributions that are heavier tailed than the lognormal ($Q < 0$), with tails between the lognormal and gamma ($\sigma > Q > 0 $), or with tails lighter than the gamma ($Q > \sigma$) adds a new and practical option for use in comparative studies \citep[e.g.,][]{dick2004, thorson2021scale} and real-world index-standardization.
+Lack-of-fit in the tails of the distribution when incorrectly fitting the gamma and lognormal distributions was clearly seen in quantile-quantile plots. These plots therefore appear useful to diagnose instances when the GGD might be appropriate.
+
+In practice, the GGD demonstrated high predictive accuracy across the species and regions we studied. The GGD performed similarly to, or better than, the lognormal and gamma models.
+This suggests that the extra parameter does not lead to overfitting or overparameterization in most cases.
+Furthermore, the GGD indicates that for some species, a distribution that is more heavy-tailed than the lognormal is more appropriate for index estimation.
+The risk of selecting the lognormal or gamma distribution for assessing fish populations may be heightened by unpredictable demographic changes over time, and selecting one of these distributions at a point in time may prevent the detection of such changes in the future. 
+From our results, it seems prudent for fisheries researchers to use the GGD instead which could estimate a different $Q$ as new data are added. In some cases, it may be useful to allow $Q$ to vary through time such as by fitting separate GGD parameters for each year of the survey to detect whether there are shifts in the shape of tails over time.
+
+Despite the additional flexibility of the GGD, in cases where index scale is important, such as when the catchability coefficient is fixed a priori in an assessment-model, it is important to compare the model-based index scale with a design-based scale or to a priori use the gamma or Tweedie distributions if a design-based index is unavailable. 
+In our analysis, we show that for GOA Pacific Ocean Perch and GOA Pacific Spiny Dogfish AIC and the estimated GGD $Q$ parameter identify the lognormal or a distribution that is more heavy-tailed than lognormal, respectively, as parsimonious.
+However, for both stocks the index estimated using a gamma distribution more closely matches the design-based index. 
+Therefore, we re-iterate the caution from \citet{thorson2021scale} that specific purposes might be better suited by a priori model selection and avoid using AIC (or cross validation) as the only criterion for model selection.
+
+We note that using the mean-CV parameterization of the GGD has many potential applications outside of the spatiotemporal model presented here. 
+For example, \citet{albertsen2017} compared the GGD against other likelihoods when fitting abundance-at-age or alternative age-composition data. 
+However, that study used the \citet{prentice1974} parameterization (i.e., using a central tendency that does not match the distribution mean). 
+Existing \textsf{R} packages, such as flexsurv, parameterize the GGD using the location ($\mu$), scale ($\sigma$) and shape ($Q$) parameters, whereas the packages VAST and sdmTMB use the mean-CV parameterization shown in Table \ref{tab:table1}.
+We recommend that further applications consider using the mean-CV parameterization, so that model parameters (i.e., estimated local density for index-standardization models, or estimated abundance-at-age for stock-assessment models) are estimated to match the mean of data (rather than a central tendency that is difficult to interpret and depends on details of the parameterization). 
+For example, \citet{cadigan2001} explored the gamma and lognormal for sequential population models, and \citet{jiao2004} explored these options for modelling variation in recruitment. 
+Both of these applications could potentially benefit from testing the GGD. 
+Additionally, \citet{cacciapaglia2024} explored the generalized-gamma distribution for index standardization, using the implementation available in VAST that we document for the first time in the present paper. 
+That study found the GGD was selected by AIC for three of four stocks, and had $\Delta \mathrm{AIC} < 2$ for the remaining stock compared with the selected lognormal distribution. 
+Finally, Monnahan et al.~(in review) has used the GGD to weight indices in stock assessment models, again using the parameterization derived from the present study.
+
+We recommend future research test the performance of species distribution models using the GGD for other applications such as characterizing ecosystem drivers and projecting spatial distributions under alternative climate scenarios.
+We also recommend further comparative research to explore biological attributes that are associated with survey catches that have larger outliers than predicted by the lognormal (i.e., $Q < 0$). 
+Previous studies have called these ``extreme catch events'' (ECEs) and have represented ECEs using a mixture distribution that arises from a mixture of dispersed and shoaling habitats \citep{thorson2012AgentBased} or with multivariate-t random fields \citep{anderson2019swans}.
+These ECEs appear to arise predictably for aggregating and shoaling species (e.g., some rockfishes, dogfish), and indices for these species then typically have substantially higher uncertainty.
+We therefore recommend that the GGD be used as a generalized method for identifying biological characteristics associated with these ECEs.
+
+\section{Supplementary material}
+
+Supplementary material containing additional figures, tables, and methods text are available at ICESJMS online version of the manuscript. 
+
+\section{Acknowledgments}
+
+We thank C.C. Monnahan, who identified the potential role of the generalized gamma distribution for index standardization while contributing to the Discussion section of \citet{thorson2021scale}. We thank K. Kristensen and the developers of Template Model Builder, without which this work would not be computationally feasible. We thank C.N. Rooper, L.A.K. Barnett, and two anonymous reviewers for helpful comments that improved this manuscript.
+
+\section{Author contributions}
+
+J.C.D: Data curation, Formal analysis, Investigation, Software, Validation, Visualization, Writing - original draft, Writing - review \& editing. 
+J.C: Data curation, Formal analysis, Investigation, Methodology, Writing - original draft, Writing review \& editing, Software, Validation.
+S.C.A: Methodology, Project administration, Software, Supervision, Validation, Writing - review \& editing.
+J.T.T: Conceptualization, Formal analysis, Methodology, Project administration, Software, Supervision, Writing review \& editing
+
+\section{Data availability}
+
+Code and data for this analysis are available at \href{https:://github.com/pbs-assess/gengamma}{https:://github.com/pbs-assess/gengamma} and will be archived at Zenodo on publication.
+
+\bibliography{refs}
+
+\clearpage
+
+\section{Tables}
+
+\begin{table}[htb]
+    \centering
+    \caption{Selected properties of the generalized gamma distribution. 
+We define $\mu$ as the location parameter, $\sigma$ as the scale parameter, and $Q$ as the family or shape parameter. 
+In this form of the probability density function (PDF), $\mu > 0$ and $\sigma > 0$, and $Q \in (-\infty, +\infty)$.
+We further define two temporary variables to simplify notation:
+$\beta = Q / \sigma$ and $k = Q^{-2}$. The symbol $\Gamma$ is the gamma function and $x$ is the random variable whose distribution is given by the PDF. Our parameterization is based on \citet{prentice1974}, \citet{lawless1980}, and \citet{jackson2016flexsurv}. Moments for $Q > 0$ are derived in \citet{stacy1965}.}
+    \begin{tabular}{ll}
+    \toprule
+    Property & Equation \\
+    \midrule
+
+            PDF & 
+         $\dfrac{|Q| k^k}{x\sigma\Gamma(k)} \exp\left[ k(Qw - e^{Qw}) \right]$\\
+         & where $w = \frac{\log(x) - \mu}{\sigma}$ \\
+
+         PDF collapses to gamma when & $Q = \sigma$ \\
+         
+         PDF collapses to lognormal when & $Q \to 0$ \\
+
+        Mean & 
+        $\Gamma \left(\frac{k\beta + 1}{\beta}\right) 
+        \cdot \frac{1}{\Gamma (k)}
+        \cdot e^{\mu - \frac{\log(k)}{\beta}},
+\quad \text{for } Q > 0$ \\
+        
+         Variance & 
+         $\left(e^{\mu-\frac{\log(k)}{\beta}}\right)^2 
+         \cdot \left[ \frac{\Gamma\left(\frac{k\beta+2}{\beta}\right)}{\Gamma(k)} -
+         \left(\frac{\Gamma\left(\frac{k\beta+1}{\beta}\right)}{\Gamma(k)} \right)^2 \right],
+\quad \text{for } Q > 0$ \\
+
+         % Coefficient of variation &
+         % $\left(\Gamma \left(\frac{k\beta + 1}{\beta}\right)\right)^{-1}
+         % \cdot 
+         % \sqrt{\Gamma \left( \frac{k \beta + 2}{\Gamma (k)} \right) \cdot \Gamma (k)}$ \\
+
+         Coefficient of variation &
+         $\sqrt{
+         \Gamma\left( \frac{k\beta + 2}{\beta} \right) \cdot \Gamma(k) \cdot
+         \left[ \Gamma\left( \frac{k\beta + 1}{\beta} \right) \right]^{-2} - 1 },
+\quad \text{for } Q > 0$ \\
+
+%          Coefficient of variation &
+%          $
+%          \sqrt{\Gamma(k) 
+%          \cdot
+%          \Gamma\left( \frac{k\beta + 2}{\beta} \right) 
+%          -
+%          \Gamma^2\left( \frac{k\beta + 1}{\beta} \right)}
+%          \cdot
+%          \Gamma \left(\frac{k \beta + 1}{\beta}\right)^{-1} ,
+% \quad \text{for } Q > 0$ \\
+
+        \bottomrule
+    \end{tabular}
+    \label{tab:table1}
+\end{table}
+
+\clearpage
+
+\section{Figures}
+
+\begin{figure}[htb]
+    \centering
+    \includegraphics[width=1\linewidth]{figs/figure-1-probability-densities.pdf}
+    \caption{Comparison of densities for three distributions across three values of the generalized gamma Q shape parameter (columns) and three scale parameter values $\sigma$ (rows). The lognormal and gamma are the same across rows. The location parameter $\mu$ is fixed at 1.8.}
+    \label{fig:compare-dists}
+\end{figure}
+
+\begin{figure}[htb]
+    \centering
+    \includegraphics[width=0.8\linewidth]{figs/figure-2-cross-sim-qq.png}
+    \caption{Quantile-quantile (QQ) plot of randomized quantile residuals for example simulated data. Columns correspond to the simulated observation likelihood and rows correspond to the fitted model observation likelihood. Columns are ordered from most heavy-tailed (Q = -1) to most light-tailed (Q = 2). The residuals have been transformed to be normally distributed if the model was consistent with the data. The diagonal line corresponds to the 1:1 line.}
+    \label{fig:cross-sim-qq}
+\end{figure}
+
+\begin{figure}[htb]
+    \centering
+    \includegraphics[width=1\linewidth]{figs/figure-3-cross-sim-RE-AIC-CI-weight.png}
+    \caption{(a) Relative error, (b) AIC weights, and (c) proportion of 50\% confidence intervals that contain the true value (``CI coverage") from 1000 simulation-estimation replicates of biomass density. Black points indicate the median value and violins indicate density. Columns represent the simulated observation likelihood and y-axis labels represent the fitted observation likelihood. Columns are ordered from most heavy-tailed (Q = -1) to most light-tailed (Q = 2). The dashed vertical line in (c) indicates the nominal coverage of 50\%. Note that in (a), to improve visual clarity of the median bias near zero, the x-axis has been limited to maximum value of 1.25, which truncates the right tail of the density for the fitted lognormal relative error.}
+    \label{fig:cross-sim-re-aicw}
+\end{figure}
+
+
+\begin{figure}[htb]
+    \centering
+    \includegraphics[width=0.9\linewidth]{figs/figure-4-50-fold.png}
+    \caption{Multi-stock AIC weights and relative differences in the summed log likelihood ($\Delta \log L$) of out-of-sample data from 50-fold cross validation. Within each survey, species are ordered by estimated generalized gamma Q value (from least to most heavy tailed; shown in the right column). The $\Delta \log L$ axis is truncated to -500 to show differences in the best performing models; missing points indicate models that did not converge in the cross validation. Stocks that did not converge using the GGD on the full dataset were omitted. GOA: Gulf of Alaska; HS-QCS: Hecate Strait and Queen Charlotte Sound; WCVI: West Coast Vancouver Island.}
+    \label{fig:multi-stock-aic}
+\end{figure}
+
+\begin{figure}[htb]
+    \centering
+    \includegraphics[width=1\linewidth]{figs/figure-5-index-rqr.pdf}
+    \caption{Examples of spatiotemporal-model-derived area-weighted indices of biomass for three groundfish species in the Gulf of Alaska across four observation likelihoods. Left column shows the indices of biomass (mean and 95\% confidence interval) with AIC weight percentages shown at the top. Right columns illustrate associated quantile-quantile plots for randomized quantile residuals that would be distributed as standard normal if the model were consistent with the data. The diagonal line corresponds to the 1:1 line. The panels are ordered from top to bottom in order of decreasing Q value (i.e., light-tailed to heavy-tailed). For Pacific Spiny Dogfish, we have truncated the y-axis and omitted values of the index estimated using the Tweedie $>10^7$ to improve visualisation of the differences in the indices estimated using the delta-lognormal, delta-gamma, and delta-gamma. The biomass indices for all other stocks are shown in the Supplementary Materials Figures \ref{fig:index-goa-supp}, \ref{fig:index-hs-qcs-supp}, and \ref{fig:index-wcvi-supp}.}
+    \label{fig:multi-stock-examples}
+\end{figure}
+
+\clearpage
+
+\renewcommand{\thefigure}{S\arabic{figure}}
+\renewcommand{\thetable}{S\arabic{table}}
+\setcounter{figure}{0}
+\setcounter{table}{0}
+\setcounter{section}{0}
+\setcounter{subsection}{0}
+\setcounter{subsubsection}{0}
+\setcounter{page}{1}
+\setcounter{equation}{0}
+\setcounter{secnumdepth}{0} % Removes section numbers
+\linenumbers
+\resetlinenumber
+% \nolinenumbers
+
+\clearpage
+
+\begin{center}
+\section{Supplementary Materials}
+\end{center}
+
+{\let\newpage\relax\maketitle}
+
+
+\begin{figure}[htb]
+    \centering
+    \includegraphics[width=0.8\linewidth]{figs/supp/sampling-diff.png}
+    \caption{(a) Spatial coverage and (b) annual data availability of the three survey regions used in the multi-stock analysis: Gulf of Alaska (GOA), Hecate Strait and Queen Charlotte Sound (HS-QCS), and West Coast Vancouver Island (WCVI).}
+    \label{fig:sampling-diff-supp}
+\end{figure}
+
+\clearpage
+
+\begin{table}[ht]
+\centering
+    \caption{Mean annual encounter rates (Rate) and the mean annual number of tows in which the species was encountered (Count), shown in descending order within each region.}
+
+\begin{small}
+\label{tab:encounter-rates}
+\begin{tabular}{llrr}
+  \toprule
+Region & Species & Rate & Count \\ 
+  \midrule
+GOA & Arrowtooth Flounder & 0.91 & 620 \\ 
+   & Walleye Pollock & 0.75 & 507 \\ 
+   & Rex Sole & 0.67 & 455 \\ 
+   & Pacific Cod & 0.63 & 433 \\ 
+   & Flathead Sole & 0.55 & 375 \\ 
+   & Dover Sole & 0.49 & 339 \\ 
+   & Pacific Ocean Perch & 0.45 & 302 \\ 
+   & Sablefish & 0.44 & 301 \\ 
+   & Shortspine Thornyhead & 0.25 & 174 \\ 
+   & Pacific Spiny Dogfish & 0.17 & 121 \\ 
+   & Lingcod & 0.13 &  86 \\ 
+   & English Sole & 0.11 &  68 \\ 
+   & Spotted Ratfish & 0.07 &  49 \\ 
+   & Petrale Sole & 0.03 &  23 \\ 
+   \midrule
+HS-QCS & Arrowtooth Flounder & 0.85 & 303 \\ 
+   & Spotted Ratfish & 0.85 & 307 \\ 
+   & Rex Sole & 0.79 & 280 \\ 
+   & Dover Sole & 0.70 & 248 \\ 
+   & Pacific Cod & 0.56 & 202 \\ 
+   & Pacific Ocean Perch & 0.54 & 189 \\ 
+   & Pacific Spiny Dogfish & 0.54 & 198 \\ 
+   & Walleye Pollock & 0.53 & 193 \\ 
+   & Sablefish & 0.52 & 183 \\ 
+   & English Sole & 0.45 & 164 \\ 
+   & Petrale Sole & 0.45 & 162 \\ 
+   & Flathead Sole & 0.38 & 138 \\ 
+   & Lingcod & 0.32 & 112 \\ 
+   & Shortspine Thornyhead & 0.32 & 110 \\ 
+   \midrule
+WCVI & Rex Sole & 0.92 & 136 \\ 
+   & Arrowtooth Flounder & 0.89 & 130 \\ 
+   & Dover Sole & 0.89 & 131 \\ 
+   & Spotted Ratfish & 0.89 & 131 \\ 
+   & Pacific Spiny Dogfish & 0.70 & 102 \\ 
+   & Sablefish & 0.66 &  96 \\ 
+   & English Sole & 0.64 &  94 \\ 
+   & Petrale Sole & 0.64 &  95 \\ 
+   & Lingcod & 0.61 &  91 \\ 
+   & Pacific Cod & 0.60 &  87 \\ 
+   & Flathead Sole & 0.40 &  59 \\ 
+   & Pacific Ocean Perch & 0.37 &  54 \\ 
+   & Walleye Pollock & 0.29 &  44 \\ 
+   & Shortspine Thornyhead & 0.26 &  38 \\ 
+   \bottomrule
+\end{tabular}
+\end{small}
+\end{table}
+
+\clearpage
+
+\begin{landscape}
+
+\begin{figure}[htb]
+    \centering
+    \includegraphics[width=\linewidth]{figs/supp/rqr-.png}
+    \caption{Quantile-quantile (QQ) plot of randomized quantile residuals for example simulated data. Columns correspond to the simulated observation likelihood and rows correspond to the fitted model observation likelihood. Columns are ordered from most heavy-tailed (Q = -1) to most light-tailed (Q = 2). The residuals have been transformed to be normally distributed if the model was consistent with the data. The diagonal line corresponds to the 1:1 line. This is an extended version of Figure~\ref{fig:cross-sim-qq}.}
+    \label{fig:cross-sim-rqr-supp}
+\end{figure}
+
+\begin{figure}[htb]
+    \centering
+    \includegraphics[width=1\linewidth]{figs/supp/aic_weight.png}
+    \caption{AIC weights from 1000 simulation-estimation replicates of biomass density. Black points indicate the median value and violins indicate density. Columns represent the simulated observation likelihood from the generalised gamma distribution (gg) and y-axis labels represent the fitted observation likelihood. Columns are ordered from most heavy-tailed (Q = -1) to most light-tailed (Q = 2). This is an extended version of Figure~\ref{fig:cross-sim-re-aicw}b.}
+    \label{fig:cross-sim-aicw-supp}
+\end{figure}
+
+\end{landscape}
+
+\begin{figure}[htb]
+    \centering
+    \includegraphics[width=1\linewidth]{figs/supp/pollock-index-rqr.pdf}
+    \caption{Spatiotemporal-model-derived area-weighted indices of biomass for Walleye Pollock in the Gulf of Alaska (GOA) and Hecate Strait \& Queen Charlotte Sound (HS-QCS) across four observation likelihoods. 
+    Left column shows the biomass indices (mean and 95\% confidence interval) estimated either (a, c) using a weak penalty that constrained the year estimates, where $\alpha_{t} \sim \operatorname{N}(0, 30^{2})$, or (b) by scaling the catch variable by 1 / 100 kg. 
+    Right columns illustrate associated quantile-quantile plots for randomized quantile residuals that would be distributed as standard normal if the model were consistent with the data. The diagonal line corresponds to the 1:1 line.}
+    \label{fig:pollock-index-rqr-supp}
+\end{figure}
+
+\begin{figure}[htb]
+    \centering
+    \includegraphics[width=1\linewidth]{figs/supp/petrale-index-rqr.pdf}
+    \caption{Spatiotemporal-model-derived area-weighted indices of biomass for Petrale Sole in the Gulf of Alaska (GOA).
+    Left column shows the biomass indices (mean and 95\% confidence interval).
+    Right columns illustrate associated quantile-quantile plots for randomized quantile residuals that would be distributed as standard normal if the model were consistent with the data. The diagonal line corresponds to the 1:1 line.
+    The GGD model is not shown because it did not converge.}
+    \label{fig:petrale-index-rqr-supp}
+\end{figure}
+
+\begin{figure}[htb]
+    \centering
+    \includegraphics[width=1\linewidth]{figs/supp/petrale-pollock-dists.png}
+    \caption{Frequency of positive catches weights (kg) observed for three stocks (Petrale Sole-GOA, Walleye Pollock-GOA, Walleye Pollock-HS-QCS). The mean proportion of survey sets where these species were encountered (catch weight $> 0$) is shown on each panel. These stocks did not converge when the delta-gengamma was fit in the main analysis. Note the y-axes are square-root transformed to improve visualisation of the tails of the data.}
+    \label{fig:trouble-species-supp}
+\end{figure}
+
+\begin{figure}[htb]
+    \centering
+    \includegraphics[width=1\linewidth]{figs/supp/index-goa.pdf}
+    \caption{Spatiotemporal-model-derived area-weighted indices of biomass (mean and 95\% confidence interval) for twelve groundfish species in the Gulf of Alaska (GOA) across three observation likelihoods.
+    Only species for which the delta-gengamma model converged are shown. 
+    Indices estimated using the Tweedie family were omitted to improve visualisation of the differences in the indices estimated using the delta-lognormal (green), delta-gamma (orange), and delta-gengamma (blue). 
+    The AIC weight is indicated for each family at the top of each panel; these values match those in Figure \ref{fig:multi-stock-aic}. 
+    The panels are ordered from top to bottom, left to right, in order of decreasing Q value (i.e., light-tailed to heavy-tailed).}
+    \label{fig:index-goa-supp}
+\end{figure}
+
+\begin{figure}[htb]
+    \centering
+    \includegraphics[width=1\linewidth]{figs/supp/index-hs-qcs.pdf}
+    \caption{Spatiotemporal-model-derived area-weighted indices of biomass (mean and 95\% confidence interval) for thirteen groundfish species in the Hecate Strait and Queen Charlotte Sound (HS-QCS) across three observation likelihoods. See description of Supplemental Figure \ref{fig:index-goa-supp} for details. There is no AIC weight for Shortspine Thornyhead because this model did not converge, see Figure \ref{fig:multi-stock-aic}.}
+    \label{fig:index-hs-qcs-supp}
+\end{figure}
+
+\begin{figure}[htb]
+    \centering
+    \includegraphics[width=1\linewidth]{figs/supp/index-wcvi.pdf}
+    \caption{Spatiotemporal-model-derived area-weighted indices of biomass (mean and 95\% confidence interval) for fourteen groundfish species in the Hecate Strait and Queen Charlotte Sound (HS-QCS) across three observation likelihoods. See description of Supplemental Figure \ref{fig:index-goa-supp} for details. One difference from Figure \ref{fig:index-goa-supp} is that the biomass index estimated using the Tweedie is shown on the Rex Sole panel because it was the best fitting model (Figure \ref{fig:multi-stock-aic}).}
+    \label{fig:index-wcvi-supp}
+\end{figure}
+
+\begin{table}[h!]
+\centering
+\caption{Ratios of mean estimated biomass from modelled indices relative to design-based indices in the GOA, ordered by decreasing difference from 1 (i.e., a value of 1 indicates the scale of the model-based index equals the scale of the design-based index).}
+\label{tab:model-design-ratio}
+\begin{tabular}{llc}
+\toprule
+Species & Family & Ratio \\
+\midrule
+\multirow{4}{*}{Arrowtooth Flounder} 
+  & delta-gamma     & 1.04 \\
+  & delta-gengamma  & 1.04 \\
+  & Tweedie         & 1.05 \\
+  & delta-lognormal & 1.43 \\
+\cmidrule(lr){1-3}
+\multirow{4}{*}{Pacific Ocean Perch} 
+  & delta-gamma     & 1.28 \\
+  & Tweedie         & 1.78 \\
+  & delta-gengamma  & 2.04 \\
+  & delta-lognormal & 2.43 \\
+\cmidrule(lr){1-3}
+\multirow{4}{*}{Pacific Spiny Dogfish} 
+  & delta-gamma     & 0.72 \\
+  & Tweedie         & 1.33 \\
+  & delta-gengamma  & 0.66 \\
+  & delta-lognormal & 0.62 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\clearpage{}
+
+\section{GGD Model Convergence}\label{ggd-convergence}
+
+For three stocks (Walleye Pollock-GOA, Walleye Pollock-HS-QCS, Petrale Sole-GOA), the delta-GGD model did not converge (Figure~\ref{fig:multi-stock-aic}).
+In the case of Walleye Pollock, we improved estimation for both the GOA and HS-QCS regions by including a weak penalty that constrained the year estimates, where $\alpha_{t} \sim \operatorname{N}(0, 30^{2})$. 
+Scaling the catch variable by 0.01 kg allowed convergence of the GOA stock (Figure~\ref{fig:pollock-index-rqr-supp}), which suggests that estimation of the GGD may be sensitive to scale and/or the starting values used for $\sigma$. 
+However, scaling by the catch weight (kg) by 1 / 10, or 1 / 100 did not enable convergence of the delta-GGD model for the HS-QCS stock. 
+In the refit models, the delta-GGD model had the highest AIC weight in both the GOA and HS-QCS stocks (Figure~\ref{fig:pollock-index-rqr-supp}). 
+Surprisingly, the $\hat{Q}$ estimate for the GOA Walleye Pollock was 0.35 in the GOA even though in the main analysis, where only the delta-lognormal, delta-gamma, and Tweedie were compared, the delta-lognormal was selected as the best model (AIC weight = 100\%, Figure \ref{fig:multi-stock-aic}).
+Furthermore, the scale of the estimated index was more similar to that estimated by the delta-gamma and Tweedie. 
+Neither applying weak penalties nor scaling the response enabled convergence for Petrale Sole in the GOA, likely because the Petrale Sole had only a 3\% encounter rate in the GOA (Figure~\ref{fig:trouble-species-supp}).
+Although the other three models for GOA Petrale Sole converged, the index estimate for 2000 had a high uncertainty and high mean CV on the index (CV = 0.39, Figure~\ref{fig:petrale-index-rqr-supp}).
+
+\clearpage
+
+\setlength{\parindent}{0ex}
+\setlength{\parskip}{1em}
+\singlespacing
+
+\nolinenumbers
+\pagestyle{empty}
+
+\section{Reviews}
+
+\subsection{Reviewer 1:}
+
+\rev{This manuscript examines the performance of a new (to fisheries)
+parameterization of the generalized gamma distribution (GGD) in spatiotemporal
+standardization of indices of abundance. The authors compare the distribution
+to other common observation likelihoods (gamma, lognormal, and Tweedie) within
+a simulation experiment and within an empirical evaluation fit to data from 15
+different species in the Gulf of Alaska and British Columbia largely using AIC.
+In the simulation experiment, the GGD appears to perform at least as well as
+the other distributions when they were used to generate the data, and across
+the full factorial, it does appear more robust than the others when the true
+generating distribution does not match that in the estimation model (although
+the gamma and tweedie performed quite well). This is a function of the fact
+that the GGD collapses to the gamma and lognormal distribution at specific
+parameter estimates. Although its performance when fitting the data generated
+from the Tweedie was not as good as the Tweedie itself, it appeared to slightly
+outperform the Tweedie (by my eye in the tails of the distribution of relative
+error) across the other distributions of observation error. For the empirical
+evaluation the GGD was selected by AIC as the best model most of the time. The
+authors conclude by suggesting fisheries researchers consider using the GGD
+instead of the gamma and lognormal models, and suggest some additional
+research.}
+
+\rev{I commend the authors on a very concise and well written paper. The GGD does appear promising and I look forward to implementing it myself.}
+
+Thank you for this positive and constructive feedback. We believe our revisions thanks to this review have improved the clarity of the text and strengthened the analysis.
+
+\rev{Just two general comments:}
+
+\rev{
+A1: I find the paper could be strengthened even further with some cross-validation in the multi-stock analysis. I understand it is a lot of computation, however should certainly be doable with outsourced high performance computing.}
+
+This is an excellent suggestion. We have added 50-fold cross validation for all the stocks. We now note the methods starting on \lr{A1}, include the results in Figure~4, and note the results starting on \lr{A1results}.
+
+\rev{
+A2: I also wonder whether the authors should consider confidence interval coverage as well in the simulation experiment. Or some other metric that focuses on the uncertainty from the GGD compared to the others. Likewise a look at how the CIs (or SEs) compare for the multi-stock empirical fits. These
+become very important when the resulting indices are used in fisheries assessments.}
+
+Again, thank you for this suggestion. We have added confidence interval coverage in the simulation experiment now shown in Figure~3c, and with text added at \lr{A2}. The 50\% confidence intervals for the gengamma family have the expected coverage in all scenarios except when the true likelihood is Tweedie, in which case the coverage is slightly less than the nominal amount (Figure~3c).
+
+\rev{Minor comments}
+
+\rev{
+A3: Consider using a different program for creating pdf next time. Line numbers repeat each page and do not appear to line up with lines of text.}
+
+We have fixed the line numbering.
+
+\rev{
+A4: Page 2. Line 26-27. What is meant by “theoretical distributions” here? Is it the same as saying “different probability distributions”?}
+
+We have changed this to ``different probability distributions''; see \lr{A4}.
+
+\rev{
+A5: Page 3. Line 26-34. Tricky sentence. Consider rewording. Could be construed as implying the generalized gamma has increased degrees of freedom.
+
+Consider: “Because the GGD has three parameters, it provides more flexibility in fitting fisheries data than the more commonly used lognormal or gamma distributions, which is advantageous if the decrease in estimation error offsets the increased degrees of freedom (and resulting increase in expected loss for out-of-sample relative to in-sample prediction) \textbf{associated with} distribution families that have fewer parameters.” The generalized gamma would have fewer degrees of freedom, unless I have misunderstood.}
+
+Thank you for this suggestion. We agree it was tricky and confusing. We have revised it further and avoided reference to degrees of freedom entirely. See \lr{A5}.
+
+\rev{
+A6: Table 1. Some aspects of formulas depict the gamma function with and without parentheses. Is there a useful distinction here? If not I suggest including parentheses in each. E.g., $\Gamma(k)$.}
+
+We have now included parentheses for each occurrence of gamma function.
+
+\rev{
+A7: Methods. How were the covariance matrices parameterized? With a Matérn? If so, please describe and especially for the multi-stock analysis, list or note the parameters estimated associated with this. E.g. a marginal SD term for the spatial GMRF and one for the spatiotemporal GMRF, and they shared a range parameter..}
+
+We have expanded on the notation and description of these models. We note that the range parameters are shared across the spatial and spatiotemporal random effects. See around \lr{A7cross} and \lr{A7multi}.
+
+\rev{
+A8: Formula 4. Should these equations be listed in the opposite order?}
+
+Yes, we agree that would make more sense---we have changed the order in equation 4. 
+
+\rev{
+A9: Page 9. Line 17-19. I don’t follow, I thought 15 species were being considered?}
+
+We have revised the text here to clarify that we focus on biomass indices for three stocks in the main text as illustrations, but that we include all the stock indices in the Supplementary Materials. See \lr{A9B2} and \lr{A9B2Results}.
+
+We have also added a note in the caption of Figure 5 directing readers to the supplementary figures: ``The biomass indices for all other stocks are shown in the Supplementary Materials Figures \ref{fig:index-goa-supp}, \ref{fig:index-hs-qcs-supp}, and \ref{fig:index-wcvi-supp}.''
+
+\rev{
+A10: Page 10. Line 45. Is this supposed to be a zero rather than o?}
+
+Indeed, this is a zero, but the font looks like that in ``text mode''. We have switched to ``math mode''.
+
+\rev{
+A11: Page 8. Line 38. Is this a prior if you’re fitting with MLE? Same comment for supplemental.}
+
+We have revised this to be described as a penalty. See \lr{A11}. We have also updated all mentions in the supplementary information figures, captions, and text. Although sometimes this is referred to as a prior with MLE, we agree it is most precise to call this a penalty.
+
+\subsection{Reviewer 2:}
+
+\rev{I've reviewed the paper “introducing the generalized gamma distribution: a flexible distribution for index standardization” prepared by Dunic et al. This paper compared the performance of generalized gamma, gamma, lognormal and tweedie distributions for index standardization using both simulation testing and case studies. Results demonstrated the advantage of using GDD to model observation errors of survey data. The MS is well written and easy to read. I like the combination of simulation testing and case studies which improved the reliability of their conclusions. The results should be of general interest to fisheries modelling, and I only have some relatively minor concerns that need to be addressed.}
+
+Thank you for the positive and thoughtful feedback. We have made revisions that hopefully address all these concerns and believe this has improved the clarity of the manuscript.
+
+\rev{
+B1: 1. Line 45, Page 3. This is the first time to mention ``Tweedie'' in the main text, and previous text only explained the linkages between GDD, gamma and lognormal and why GDD could be of interest. It is a bit surprising to see Tweedie was suddenly included in the comparison. I recommend the authors to add some background text BEFORE this line to explain the importance of Tweedie, its relationship to other distributions, and why the authors decide to add it to the comparison.}
+
+Thank you for this suggestion, we agree this needs earlier introduction. We have added text to the previous paragraph to introduce the Tweedie as a commonly used alternative to delta models, see \lr{B1}.
+
+\rev{
+B2: 2. Lines 52-54, Page 3. I wonder why these three species were selected and why only three. The authors state they are selected due to their “different life history and population structure attributes” but I’m not quite convinced here. (1) why and how would life history and population structure attributes affect the performance of GDD? (2) Assuming life history and population structure matters, how significant are the selected three species differ with respect to these attributes? (3) Assuming the selected 3 species are justified, why only focus on GOA, but not the other two areas? My feeling is that these 3 species are selected due to their different values of estimated Q rather than life history or population structure. The purpose may be to test whether the biomass estimation was similar between GDD and other distributions under different Q values. If that is the purpose, I wonder if it is too much work for the authors to estimate the biomass trend for all species-area combinations, and then they can compare the similarity among different distributions based on more scenarios of estimated Q values. I recommend this because this part is a bit sketchy compared to the simulation-testing and the case study of 15 species over three regions.}
+
+Our response here is the same as for reviewer comment A9. We initially started working with three species then expanded the analysis to many species and regions to do a more comprehensive comparison of the generalized gamma. We have revised the text to clarify that in the main text we focus on biomass indices for three species with a range of values $Q$ as illustrations, but that we do include all the stock indices in the Supplementary Materials. See \lr{A9B2} and \lr{A9B2Results}.
+
+We have also added a note in the caption of Figure 5 directing readers to the supplementary figures: ``The biomass indices for all other stocks are shown in the Supplementary Materials Figures \ref{fig:index-goa-supp}, \ref{fig:index-hs-qcs-supp}, and \ref{fig:index-wcvi-supp}.''
+
+\rev{
+B3: 3. Lines  38-40, Page 7. `\ldots were well-sampled in the HS-QCS and WCVI regions''. How about GOA, these 15 species were not well samples there? If so, would this affect your results, especially considering your biomass estimation part only focus on three species in GOA.
+}
+
+Thank you for pointing this out. We now clarify in the text (see \lr{B3}) that most species in the GOA had mean annual encounter rates $> 20$\%, and that species with rates $<20$\% have mean annual number of encounters similar to those of the smaller WCVI region. We have also added Table~\ref{tab:encounter-rates} in the supplement to better compare the encounter rates and encounter numbers. Furthermore, in responding to this comment we realized that we miscounted and there are 14 species not 15 in the final analysis. This has been corrected throughout.
+
+\rev{
+B4: 4. Last sentence, Page 8. Grammar error, please revise.
+}
+
+Thanks, fixed.
+
+\rev{
+B5: 5. Lines 17-19, Page 9. ``We consider three case study species from the Gulf of Alaska''. Not clear at all what specifically did you do with these three stocks. This is one example why I feel this part is a bit sketchy compared to the other two parts.
+}
+
+See our response to reviewer comment A9 and B2. This was a misunderstanding due to how we had worded parts of the methods and results. We examined the indexes for \emph{all} 14 species across three regions but only had space to show three in the main text. The rest are in the supplement.
+
+\rev{
+B6: 6. Figure 5. Incomplete plot in the bottom left panel.
+}
+
+The maximum values of the biomass estimates from the Tweedie were much larger than the other indices so we chose to truncate these values to make it easier to compare the estimates from the other families. We have made two changes to make this clear to the reader:
+
+\begin{enumerate}
+
+    \item the caption text now includes: ``For Pacific Spiny Dogfish, we have truncated the y-axis and omitted values of the index estimated using the Tweedie (pink) $>10^7$ to improve visualization of the differences in the indices estimated using the delta-lognormal (green), delta-gamma (orange), and delta-gamma (blue).''
+
+    \item  we have added a thin horizontal grey line where the plot is truncated.
+
+\end{enumerate}
+
+\end{document}
