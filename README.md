@@ -8,7 +8,6 @@ git clone https://github.com/ChrisFishCahill/RTMBdre.git
 cd RTMBdre
 make install        # install required R packages (system JAGS must be installed first)
 time make           # sequential run
-time make parallel  # parallel run - distributes simulations across all available cores
 ```
 
 This runs the simulation and all results and plots are saved to `results/` and `figures/`.
@@ -53,13 +52,13 @@ Histograms represent distributions of estimates from 100 simulated datasets. For
 
 ## Timing
 
-Mean time per fit (seconds), averaged over 100 simulations. JAGS timings include the full chain: adaptation, burnin, and sampling. All three frameworks fit identical simulated datasets.
+Mean time per fit (seconds), averaged over 500 simulations. JAGS timings include the full chain: adaptation, burnin, and sampling. All three frameworks fit identical simulated datasets.
 
 | Model | RTMB (s) | unmarked (s) | JAGS (s) | RTMB vs unmarked | RTMB vs JAGS |
 |---|---|---|---|---|---|
-| Occupancy | 0.042 | 0.02 | 12.915 | 0.5x | 307.5x |
-| N-mixture | 0.093 | 0.164 | 51.605 | 1.8x | 554.9x |
-| Dail-Madsen | 0.031 | 0.035 | 352.979 | 1.1x | 11386.4x |
+| Occupancy | 0.087 | 2.067 | 28.888 | 23.8x | 332x |
+| N-mixture | 0.154 | 0.277 | 85.413 | 1.8x | 554.6x |
+| Dail-Madsen | 0.006 | 0.332 | 558.549 | 55.3x | 93091.5x |
 
 The JAGS Dail-Madsen is expected to be substantially slower than RTMB. JAGS must sample the full latent state space — `N_it` and `S_it` at every site and time step — via Gibbs steps. RTMB avoids this entirely by marginalizing out the discrete states analytically via the forward algorithm. 
 
@@ -76,8 +75,8 @@ Convergence rates across simulations (proportion of fits with R-hat < 1.1 for al
 | Model | Convergence Rate |
 |---|---|
 | Occupancy | 1 |
-| N-mixture | 1 |
-| Dail-Madsen | 0.6 |
+| N-mixture | 0.9 |
+| Dail-Madsen | 0.33 |
 
 The lower convergence rate for Dail-Madsen reflects the difficulty of sampling its high-dimensional latent state space — `N[i,t]`, `S[i,t]`, and `G[i,t]` must all be sampled explicitly via Gibbs steps at every site and time step. RTMB sidesteps this entirely by marginalizing out the discrete states via the forward algorithm. Convergence rates and per-simulation R-hat values are printed to the console and saved in `results/timing_summary.md` on each run.
 
@@ -92,7 +91,6 @@ models/
 figures/               # plots (created on run)
 results/               # .rds results and timing summary (created on run)
 run_all.R              # master script (sequential)
-run_all_parallel.R     # master script (parallel, one sim per core)
 install.R              # installs required R packages
 Makefile
 ```
@@ -103,7 +101,6 @@ Each model file contains RTMB, unmarked, and JAGS fits in a single internal work
 
 ```bash
 make                                      # run all models sequentially via run_all.R
-make parallel                             # run all models in parallel (one sim per core)
 make occupancy                            # run occupancy only one time
 make nmixture                             # run N-mixture only one time
 make dailmadsen                           # run Dail-Madsen only one time

@@ -39,7 +39,7 @@ library(R2jags)
 jags_model_dm <- "
 model {
   # Priors
-  lambda ~ dunif(0, 500)
+  lambda ~ dunif(0, 100)
   gamma  ~ dunif(0, 100)
   omega  ~ dunif(0, 1)
   p      ~ dunif(0, 1)
