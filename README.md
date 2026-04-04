@@ -4,8 +4,8 @@ Occupancy, N-mixture, and open population models such as the Dail-Madsen are amo
 ## Quick Start
 
 ```bash
-git clone https://github.com/ChrisFishCahill/RTMB-dre.git
-cd RTMB-dre
+git clone https://github.com/ChrisFishCahill/RTMBdre.git
+cd RTMBdre
 make install        # install required R packages (system JAGS must be installed first)
 time make           # sequential run
 time make parallel  # parallel run - distributes simulations across all available cores
@@ -40,7 +40,7 @@ y_it | N_it ~ Binomial(N_it, p)
 ```
 
 ## Results
-Histograms represent distributions of estimates from 100 simulated datasets. For RTMB and unmarked these are maximum likelihood estimates; for JAGS these are posterior means (3 chains, 5000 iterations, 2500 burnin). True values used for simulation are indicated by the red vertical lines.
+Histograms represent distributions of estimates from 100 simulated datasets. For RTMB and unmarked these are maximum likelihood estimates; for JAGS these are posterior means (4 chains, 20000 iterations, 10000 burnin for occupancy and N-mixture; 100000 iterations, 50000 burnin for Dail-Madsen). True values used for simulation are indicated by the red vertical lines.
 
 ### Occupancy
 ![Occupancy](figures/occupancy.png)
@@ -57,9 +57,9 @@ Mean time per fit (seconds), averaged over 100 simulations. JAGS timings include
 
 | Model | RTMB (s) | unmarked (s) | JAGS (s) | RTMB vs unmarked | RTMB vs JAGS |
 |---|---|---|---|---|---|
-| Occupancy | 0.088 | 1.525 | 13.391 | 17.3x | 152.2x |
-| N-mixture | 0.155 | 0.266 | 41.813 | 1.7x | 269.8x |
-| Dail-Madsen | 0.006 | 0.307 | 268.977 | 51.2x | 44829.5x |
+| Occupancy | 0.064 | 0.03 | — | 0.5x | — |
+| N-mixture | 0.109 | 0.206 | — | 1.9x | — |
+| Dail-Madsen | 0.129 | 0.136 | — | 1.1x | — |
 
 *JAGS columns will be populated on first run.*
 
@@ -69,16 +69,31 @@ The JAGS Dail-Madsen is expected to be substantially slower than RTMB. JAGS must
 
 ## JAGS MCMC Settings
 
-JAGS is run with the following defaults, configurable at the top of `run_all.R`:
+JAGS settings are configurable at the top of `run_all.R` and `run_all_parallel.R`. Occupancy and N-mixture use shorter chains; Dail-Madsen requires longer runs due to the complexity of its latent state space.
 
-| Setting | Default | Notes |
-|---|---|---|
-| `n.chains` | 3 | independent chains for convergence assessment |
-| `n.iter` | 5000 | total iterations per chain including burnin |
-| `n.burnin` | 2500 | discarded warmup iterations |
-| `n.thin` | 1 | thinning interval |
+| Setting | Occupancy & N-mixture | Dail-Madsen | Notes |
+|---|---|---|---|
+| `n.chains` | 4 | 4 | independent chains for convergence assessment |
+| `n.iter` | 20000 | 100000 | total iterations per chain including burnin |
+| `n.burnin` | 10000 | 50000 | discarded warmup iterations |
+| `n.thin` | 1 | 1 | thinning interval |
 
-Convergence is assessed via the Gelman-Rubin statistic (R-hat). A fit is flagged as converged when R-hat < 1.1 for all monitored parameters. Convergence rates across the 100 simulations are printed to the console and saved alongside timings in `results/timing_summary.md`.
+## MCMC Convergence Diagnostics
+
+Convergence is assessed using the Gelman-Rubin potential scale reduction factor (R-hat; Gelman & Rubin 1992). R-hat compares within-chain to between-chain variance across the 4 independent chains — values near 1.0 indicate convergence, and a fit is flagged as converged when R-hat < 1.1 for all monitored parameters. Running multiple chains from dispersed initial values is essential: a single chain can appear to have converged while still exploring only a local region of the posterior.
+
+Convergence rates across 100 simulations (proportion of fits with R-hat < 1.1 for all parameters):
+
+| Model | Convergence Rate |
+|---|---|
+| Occupancy | 1.00 |
+| N-mixture | 0.79 |
+| Dail-Madsen | 0.33 |
+
+The lower convergence rate for Dail-Madsen reflects the difficulty of sampling its high-dimensional latent state space — `N[i,t]`, `S[i,t]`, and `G[i,t]` must all be sampled explicitly via Gibbs steps at every site and time step. RTMB sidesteps this entirely by marginalizing out the discrete states via the forward algorithm, which is a central motivation for this work. Convergence rates and per-simulation R-hat values are printed to the console and saved in `results/timing_summary.md` on each run.
+
+### References
+- Gelman, A. and Rubin, D.B. (1992) Inference from Iterative Simulation Using Multiple Sequences. *Statistical Science* 7:457-472.
 
 ## Repository Structure
 
@@ -102,10 +117,12 @@ Each model file contains RTMB, unmarked, and JAGS fits in a single internal work
 
 ```bash
 make                                      # run all models sequentially via run_all.R
-make parallel                             # run models in parallel via run_all_parallel.R
+make parallel                             # run all models in parallel (one sim per core)
 make occupancy                            # run occupancy only one time
 make nmixture                             # run N-mixture only one time
 make dailmadsen                           # run Dail-Madsen only one time
+make spde                                 # run spatial Dail-Madsen (SPDE) only one time
+make install                              # install required R packages
 make clean                                # remove results and figures
 ```
 
@@ -161,3 +178,4 @@ This runs `install.R` which installs all required R packages (`RTMB`, `unmarked`
 - Dail, D. and Madsen, L. (2011) Models for Estimating Abundance from Repeated Counts of an Open Metapopulation. *Biometrics* 67:577-587.
 - MacKenzie, D.I. et al. (2002) Estimating Site Occupancy Rates When Detection Probabilities Are Less Than One. *Ecology* 83:2248-2255.
 - Royle, J.A. (2004) N-Mixture Models for Estimating Population Size from Spatially Replicated Counts. *Biometrics* 60:108-115.
+

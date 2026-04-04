@@ -48,9 +48,9 @@ sim_data_occ <- function(R, T, psi, p) {
 }
 
 fit_all_occ <- function(s, R, T, psi_true, p_true,
-                     n.chains = 3, n.iter = 5000, n.burnin = 2500, n.thin = 1) {
+                        n.chains = 3, n.iter = 5000, n.burnin = 2500, n.thin = 1) {
   dat <- sim_data_occ(R, T, psi_true, p_true)
-  y   <- dat$y
+  y <- dat$y
 
   # ------------------------------------------------------------------
   # RTMB
@@ -58,7 +58,7 @@ fit_all_occ <- function(s, R, T, psi_true, p_true,
   f <- function(par) {
     getAll(par, dat)
     psi <- plogis(logit_psi)
-    p   <- plogis(logit_p)
+    p <- plogis(logit_p)
     nll <- 0
     for (i in 1:R) {
       nll <- nll - dbinom(z[i], size = 1, prob = psi, log = TRUE)
@@ -72,19 +72,24 @@ fit_all_occ <- function(s, R, T, psi_true, p_true,
 
   time_rtmb <- system.time({
     obj <- tryCatch(
-      MakeADFun(f, par, random = "z",
-                integrate = list(z = TMB::SR(c(0, 1), discrete = TRUE))),
+      MakeADFun(f, par,
+        random = "z",
+        integrate = list(z = TMB::SR(c(0, 1), discrete = TRUE))
+      ),
       error = function(e) NULL
     )
-    if (!is.null(obj))
+    if (!is.null(obj)) {
       opt <- tryCatch(nlminb(obj$par, obj$fn, obj$gr), error = function(e) NULL)
+    }
   })
 
   if (is.null(obj) || is.null(opt) || opt$convergence != 0) {
     return(list(
-      estimates = c(psi_rtmb = NA, p_rtmb = NA,
-                    psi_unm  = NA, p_unm  = NA,
-                    psi_jags = NA, p_jags = NA),
+      estimates = c(
+        psi_rtmb = NA, p_rtmb = NA,
+        psi_unm = NA, p_unm = NA,
+        psi_jags = NA, p_jags = NA
+      ),
       time_rtmb = NA, time_unm = NA, time_jags = NA,
       jags_converged = NA
     ))
@@ -93,7 +98,7 @@ fit_all_occ <- function(s, R, T, psi_true, p_true,
   # ------------------------------------------------------------------
   # unmarked
   # ------------------------------------------------------------------
-  umf      <- unmarkedFrameOccu(y = y)
+  umf <- unmarkedFrameOccu(y = y)
   time_unm <- system.time({
     fit_unm <- tryCatch(
       suppressWarnings(occu(~1 ~ 1, data = umf)),
@@ -103,9 +108,11 @@ fit_all_occ <- function(s, R, T, psi_true, p_true,
 
   if (is.null(fit_unm)) {
     return(list(
-      estimates = c(psi_rtmb = NA, p_rtmb = NA,
-                    psi_unm  = NA, p_unm  = NA,
-                    psi_jags = NA, p_jags = NA),
+      estimates = c(
+        psi_rtmb = NA, p_rtmb = NA,
+        psi_unm = NA, p_unm = NA,
+        psi_jags = NA, p_jags = NA
+      ),
       time_rtmb = NA, time_unm = NA, time_jags = NA,
       jags_converged = NA
     ))
@@ -117,40 +124,44 @@ fit_all_occ <- function(s, R, T, psi_true, p_true,
   model_file <- file.path(tempdir(), "jags_model_occ.txt")
   writeLines(jags_model_occ, model_file)
 
-  jags_data  <- list(y = y, R = R, T = T)
-  jags_inits <- function() list(
-    psi = runif(1, 0.1, 0.9),
-    p   = runif(1, 0.1, 0.9),
-    z   = apply(y, 1, max)          # initialise z at observed max
-  )
+  jags_data <- list(y = y, R = R, T = T)
+  jags_inits <- function() {
+    list(
+      psi = runif(1, 0.1, 0.9),
+      p   = runif(1, 0.1, 0.9),
+      z   = apply(y, 1, max) # initialise z at observed max
+    )
+  }
 
   time_jags <- system.time({
     fit_jags <- tryCatch(
       suppressWarnings(
-        jags(data               = jags_data,
-                      inits              = jags_inits,
-                      parameters.to.save = c("psi", "p"),
-                      model.file         = model_file,
-                      n.chains           = n.chains,
-                      n.iter             = n.iter,
-                      n.burnin           = n.burnin,
-                      n.thin             = n.thin,
-                      progress.bar       = "none")
+        jags(
+          data = jags_data,
+          inits = jags_inits,
+          parameters.to.save = c("psi", "p"),
+          model.file = model_file,
+          n.chains = n.chains,
+          n.iter = n.iter,
+          n.burnin = n.burnin,
+          n.thin = n.thin,
+          progress.bar = "none"
+        )
       ),
       error = function(e) NULL
     )
   })
 
   if (is.null(fit_jags)) {
-    jags_psi       <- NA
-    jags_p         <- NA
+    jags_psi <- NA
+    jags_p <- NA
     jags_converged <- NA
   } else {
-    sums           <- fit_jags$BUGSoutput$summary
-    jags_psi       <- sums["psi", "mean"]
-    jags_p         <- sums["p",   "mean"]
+    sums <- fit_jags$BUGSoutput$summary
+    jags_psi <- sums["psi", "mean"]
+    jags_p <- sums["p", "mean"]
     # Rhat < 1.1 for all monitored params (excluding deviance)
-    rhats          <- sums[rownames(sums) != "deviance", "Rhat"]
+    rhats <- sums[rownames(sums) != "deviance", "Rhat"]
     jags_converged <- all(rhats < 1.1, na.rm = TRUE)
   }
 
@@ -163,9 +174,9 @@ fit_all_occ <- function(s, R, T, psi_true, p_true,
       psi_jags = jags_psi,
       p_jags   = jags_p
     ),
-    time_rtmb      = time_rtmb["elapsed"],
-    time_unm       = time_unm["elapsed"],
-    time_jags      = time_jags["elapsed"],
+    time_rtmb = time_rtmb["elapsed"],
+    time_unm = time_unm["elapsed"],
+    time_jags = time_jags["elapsed"],
     jags_converged = jags_converged
   )
 }
@@ -176,10 +187,12 @@ run_occupancy <- function(nsim = 1, R = 200, T = 5,
                           n.chains = 3, n.iter = 5000,
                           n.burnin = 2500, n.thin = 1) {
   set.seed(seed)
-  raw <- lapply(1:nsim, function(s)
+  raw <- lapply(1:nsim, function(s) {
     fit_all_occ(s, R, T, psi_true, p_true,
-             n.chains = n.chains, n.iter = n.iter,
-             n.burnin = n.burnin, n.thin = n.thin))
+      n.chains = n.chains, n.iter = n.iter,
+      n.burnin = n.burnin, n.thin = n.thin
+    )
+  })
 
   estimates_all <- do.call(rbind, lapply(raw, function(x) x$estimates))
   times_all <- data.frame(
@@ -189,17 +202,17 @@ run_occupancy <- function(nsim = 1, R = 200, T = 5,
   )
 
   # Keep only sims where all three frameworks succeeded
-  ok        <- complete.cases(estimates_all) & complete.cases(times_all)
+  ok <- complete.cases(estimates_all) & complete.cases(times_all)
   estimates <- as.data.frame(estimates_all[ok, ])
-  times     <- times_all[ok, ]
+  times <- times_all[ok, ]
 
   conv_rate <- mean(sapply(raw, function(x) x$jags_converged), na.rm = TRUE)
 
   list(
-    model         = "occupancy",
-    estimates     = estimates,
-    times         = times,
-    truth         = c(psi = psi_true, p = p_true),
+    model = "occupancy",
+    estimates = estimates,
+    times = times,
+    truth = c(psi = psi_true, p = p_true),
     jags_conv_rate = conv_rate,
     nsim = nsim, R = R, T = T
   )
@@ -210,8 +223,8 @@ if (sys.nframe() == 0) {
   res <- run_occupancy()
   dir.create("results", showWarnings = FALSE)
   saveRDS(res, "results/occupancy.rds")
-  cat("Mean RTMB time:",  round(mean(res$times$rtmb,  na.rm = TRUE), 3), "s\n")
+  cat("Mean RTMB time:", round(mean(res$times$rtmb, na.rm = TRUE), 3), "s\n")
   cat("Mean unmarked time:", round(mean(res$times$unm, na.rm = TRUE), 3), "s\n")
-  cat("Mean JAGS time:",  round(mean(res$times$jags,  na.rm = TRUE), 3), "s\n")
+  cat("Mean JAGS time:", round(mean(res$times$jags, na.rm = TRUE), 3), "s\n")
   cat("JAGS convergence rate:", round(res$jags_conv_rate, 3), "\n")
 }

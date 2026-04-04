@@ -9,10 +9,10 @@
 #   Windows/other: https://mcmc-jags.sourceforge.io
 
 pkgs <- c(
-  "RTMB",       # automatic differentiation + SR/forward algorithm
-  "unmarked",   # MLE benchmark for occupancy, N-mixture, Dail-Madsen
-  "R2jags",     # JAGS interface (requires system JAGS)
-  "fmesher",    # SPDE mesh construction for spatial Dail-Madsen
+  "RTMB", # automatic differentiation + SR/forward algorithm
+  "unmarked", # MLE benchmark for occupancy, N-mixture, Dail-Madsen
+  "R2jags", # JAGS interface (requires system JAGS)
+  "fmesher", # SPDE mesh construction for spatial Dail-Madsen
   "parallel"
 )
 
