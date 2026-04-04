@@ -57,9 +57,9 @@ Mean time per fit (seconds), averaged over 100 simulations. JAGS timings include
 
 | Model | RTMB (s) | unmarked (s) | JAGS (s) | RTMB vs unmarked | RTMB vs JAGS |
 |---|---|---|---|---|---|
-| Occupancy | 0.064 | 0.03 | — | 0.5x | — |
-| N-mixture | 0.109 | 0.206 | — | 1.9x | — |
-| Dail-Madsen | 0.129 | 0.136 | — | 1.1x | — |
+| Occupancy | 0.088 | 1.525 | 13.391 | 17.3x | 152.2x |
+| N-mixture | 0.155 | 0.266 | 41.813 | 1.7x | 269.8x |
+| Dail-Madsen | 0.006 | 0.307 | 268.977 | 51.2x | 44829.5x |
 
 *JAGS columns will be populated on first run.*
 
@@ -102,6 +102,7 @@ Each model file contains RTMB, unmarked, and JAGS fits in a single internal work
 
 ```bash
 make                                      # run all models sequentially via run_all.R
+make parallel                             # run models in parallel via run_all_parallel.R
 make occupancy                            # run occupancy only one time
 make nmixture                             # run N-mixture only one time
 make dailmadsen                           # run Dail-Madsen only one time

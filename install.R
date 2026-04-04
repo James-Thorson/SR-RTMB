@@ -12,7 +12,8 @@ pkgs <- c(
   "RTMB",       # automatic differentiation + SR/forward algorithm
   "unmarked",   # MLE benchmark for occupancy, N-mixture, Dail-Madsen
   "R2jags",     # JAGS interface (requires system JAGS)
-  "fmesher"     # SPDE mesh construction for spatial Dail-Madsen
+  "fmesher",    # SPDE mesh construction for spatial Dail-Madsen
+  "parallel"
 )
 
 to_install <- pkgs[!pkgs %in% rownames(installed.packages())]
