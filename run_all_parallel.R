@@ -4,6 +4,10 @@
 # so results are statistically equivalent to the sequential version.
 # Usage: Rscript run_all_parallel.R
 #   or:  make parallel
+library(parallel)
+library(RTMB)
+library(unmarked)
+library(R2jags)
 source("models/occupancy.R")
 source("models/nmixture.R")
 source("models/dail_madsen.R")
@@ -37,11 +41,11 @@ dm_p <- 0.5
 dm_seed <- 333
 # JAGS MCMC settings - applied to occupancy and N-mixture
 jags_chains <- 4
-jags_iter <- 40000
+jags_iter <- 10000
 jags_burnin <- 20000
 jags_thin <- 1
 # Dail-Madsen needs longer chains to converge
-dm_jags_iter <- 100000
+dm_jags_iter <- 10000
 dm_jags_burnin <- 50000
 # -----------------------------------------------------------
 # Parallel wrappers

@@ -40,7 +40,7 @@ y_it | N_it ~ Binomial(N_it, p)
 ```
 
 ## Results
-Histograms represent distributions of estimates from 100 simulated datasets. For RTMB and unmarked these are maximum likelihood estimates; for JAGS these are posterior means (4 chains, 20000 iterations, 10000 burnin for occupancy and N-mixture; 100000 iterations, 50000 burnin for Dail-Madsen). True values used for simulation are indicated by the red vertical lines.
+Histograms represent distributions of estimates from 100 simulated datasets. For RTMB and unmarked these are maximum likelihood estimates; for JAGS these are posterior means. True values used for simulation are indicated by the red vertical lines.
 
 ### Occupancy
 ![Occupancy](figures/occupancy.png)
@@ -57,9 +57,9 @@ Mean time per fit (seconds), averaged over 100 simulations. JAGS timings include
 
 | Model | RTMB (s) | unmarked (s) | JAGS (s) | RTMB vs unmarked | RTMB vs JAGS |
 |---|---|---|---|---|---|
-| Occupancy | 0.092 | 1.937 | 28.419 | 21.1x | 308.9x |
-| N-mixture | 0.157 | 0.269 | 84.083 | 1.7x | 535.6x |
-| Dail-Madsen | 0.006 | 0.306 | 569.993 | 51x | 94998.8x |
+| Occupancy | 0.042 | 0.02 | 12.915 | 0.5x | 307.5x |
+| N-mixture | 0.093 | 0.164 | 51.605 | 1.8x | 554.9x |
+| Dail-Madsen | 0.031 | 0.035 | 352.979 | 1.1x | 11386.4x |
 
 The JAGS Dail-Madsen is expected to be substantially slower than RTMB. JAGS must sample the full latent state space — `N_it` and `S_it` at every site and time step — via Gibbs steps. RTMB avoids this entirely by marginalizing out the discrete states analytically via the forward algorithm. 
 
@@ -76,8 +76,8 @@ Convergence rates across simulations (proportion of fits with R-hat < 1.1 for al
 | Model | Convergence Rate |
 |---|---|
 | Occupancy | 1 |
-| N-mixture | 0.9 |
-| Dail-Madsen | 0.34 |
+| N-mixture | 1 |
+| Dail-Madsen | 0.6 |
 
 The lower convergence rate for Dail-Madsen reflects the difficulty of sampling its high-dimensional latent state space — `N[i,t]`, `S[i,t]`, and `G[i,t]` must all be sampled explicitly via Gibbs steps at every site and time step. RTMB sidesteps this entirely by marginalizing out the discrete states via the forward algorithm. Convergence rates and per-simulation R-hat values are printed to the console and saved in `results/timing_summary.md` on each run.
 
