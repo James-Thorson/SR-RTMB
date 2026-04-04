@@ -39,13 +39,14 @@ dm_seed <- 333
 
 # JAGS MCMC settings - applied to occupancy and N-mixture
 jags_chains <- 4
-jags_iter <- 30000
-jags_burnin <- 20000
+jags_iter <- 20000
+jags_burnin <- 10000
 jags_thin <- 1
 
 # Dail-Madsen needs longer chains to converge
-dm_jags_iter <- 100000
-dm_jags_burnin <- 50000
+dm_jags_iter <- 50000
+dm_jags_burnin <- 25000
+
 # -----------------------------------------------------------
 # Run models
 # -----------------------------------------------------------
@@ -168,9 +169,10 @@ cat("\nTiming saved to results/timing_summary.md\n")
 
 # Update README timing table in place
 readme <- readLines("README.md")
-start <- grep("\\| Occupancy \\|", readme)[1]
-end <- grep("\\| Dail-Madsen \\|", readme)[1]
-if (!is.na(start) && !is.na(end)) {
+header <- grep("\\| Model \\| RTMB", readme)[1]
+start <- header + 2L
+end <- header + 4L
+if (!is.na(header)) {
   readme[start] <- paste0(
     "| Occupancy | ", timing$RTMB_mean_s[1],
     " | ", timing$unmarked_mean_s[1],
