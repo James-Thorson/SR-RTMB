@@ -181,15 +181,17 @@ run_occupancy <- function(nsim = 1, R = 200, T = 5,
              n.chains = n.chains, n.iter = n.iter,
              n.burnin = n.burnin, n.thin = n.thin))
 
-  estimates <- as.data.frame(na.omit(
-    do.call(rbind, lapply(raw, function(x) x$estimates))
-  ))
-
-  times <- na.omit(data.frame(
+  estimates_all <- do.call(rbind, lapply(raw, function(x) x$estimates))
+  times_all <- data.frame(
     rtmb = sapply(raw, function(x) x$time_rtmb),
     unm  = sapply(raw, function(x) x$time_unm),
     jags = sapply(raw, function(x) x$time_jags)
-  ))
+  )
+
+  # Keep only sims where all three frameworks succeeded
+  ok        <- complete.cases(estimates_all) & complete.cases(times_all)
+  estimates <- as.data.frame(estimates_all[ok, ])
+  times     <- times_all[ok, ]
 
   conv_rate <- mean(sapply(raw, function(x) x$jags_converged), na.rm = TRUE)
 

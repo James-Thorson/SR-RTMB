@@ -6,7 +6,9 @@ Occupancy, N-mixture, and open population models such as the Dail-Madsen are amo
 ```bash
 git clone https://github.com/ChrisFishCahill/RTMB-dre.git
 cd RTMB-dre
-time make # about three minutes without JAGS; substantially longer with JAGS enabled
+make install        # install required R packages (system JAGS must be installed first)
+time make           # sequential run
+time make parallel  # parallel run - distributes simulations across all available cores
 ```
 
 This runs the simulation and all results and plots are saved to `results/` and `figures/`.
@@ -55,9 +57,9 @@ Mean time per fit (seconds), averaged over 100 simulations. JAGS timings include
 
 | Model | RTMB (s) | unmarked (s) | JAGS (s) | RTMB vs unmarked | RTMB vs JAGS |
 |---|---|---|---|---|---|
-| Occupancy | 0.03 | 0.01 | 6.19 | 0.3x | 206.3x |
-| N-mixture | 0.067 | 0.142 | 63.176 | 2.1x | 942.9x |
-| Dail-Madsen | 0.077 | 0.09 | 166.3 | 1.2x | 2159.7x |
+| Occupancy | 0.064 | 0.03 | — | 0.5x | — |
+| N-mixture | 0.109 | 0.206 | — | 1.9x | — |
+| Dail-Madsen | 0.129 | 0.136 | — | 1.1x | — |
 
 *JAGS columns will be populated on first run.*
 
@@ -88,7 +90,8 @@ models/
   dail_madsen_spde.R    # spatial Dail-Madsen with GMRF on lambda via SPDE
 figures/               # plots (created on run)
 results/               # .rds results and timing summary (created on run)
-run_all.R              # master script
+run_all.R              # master script (sequential)
+run_all_parallel.R     # master script (parallel, one sim per core)
 install.R              # installs required R packages
 Makefile
 ```

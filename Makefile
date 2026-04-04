@@ -1,10 +1,14 @@
-.PHONY: all run occupancy nmixture dailmadsen spde install clean
+.PHONY: all run parallel occupancy nmixture dailmadsen spde install clean
 
 all: run
 
-# run all models via master script
+# run all models sequentially
 run:
 	Rscript run_all.R
+
+# run all models in parallel (one sim per core)
+parallel:
+	Rscript run_all_parallel.R
 
 # run individual models
 occupancy:

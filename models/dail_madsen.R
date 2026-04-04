@@ -266,14 +266,21 @@ run_dailmadsen <- function(nsim = 1, M = 100, T = 5,
          time_jags      = t["elapsed"])
   })
 
-  res_rtmb <- na.omit(as.data.frame(do.call(rbind, res_rtmb)))
-  res_unm  <- na.omit(as.data.frame(do.call(rbind, res_unm)))
-  res_jags <- na.omit(as.data.frame(
+  res_rtmb <- as.data.frame(do.call(rbind, res_rtmb))
+  res_unm  <- as.data.frame(do.call(rbind, res_unm))
+  res_jags <- as.data.frame(
     do.call(rbind, lapply(jags_raw, function(x) x$estimates))
-  ))
+  )
   names(res_rtmb) <- c("lambda", "gamma", "omega", "p")
   names(res_unm)  <- c("lambda", "gamma", "omega", "p")
   names(res_jags) <- c("lambda", "gamma", "omega", "p")
+
+  # Drop the same simulation indices from all three frameworks so estimates
+  # always correspond to the same dataset - critical for fair comparison
+  ok <- complete.cases(res_rtmb) & complete.cases(res_unm) & complete.cases(res_jags)
+  res_rtmb <- res_rtmb[ok, ]
+  res_unm  <- res_unm[ok, ]
+  res_jags <- res_jags[ok, ]
 
   jags_times    <- sapply(jags_raw, function(x) x$time_jags)
   conv_rate     <- mean(sapply(jags_raw, function(x) x$jags_converged), na.rm = TRUE)
