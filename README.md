@@ -57,22 +57,15 @@ Mean time per fit (seconds), averaged over 100 simulations. JAGS timings include
 
 | Model | RTMB (s) | unmarked (s) | JAGS (s) | RTMB vs unmarked | RTMB vs JAGS |
 |---|---|---|---|---|---|
-| Occupancy | 0.087 | 1.459 | 13.384 | 16.8x | 153.8x |
-| N-mixture | 0.154 | 0.268 | 42.055 | 1.7x | 273.1x |
-| Dail-Madsen | 0.006 | 0.328 | 273.608 | 54.7x | 45601.3x |
+| Occupancy | 0.092 | 1.937 | 28.419 | 21.1x | 308.9x |
+| N-mixture | 0.157 | 0.269 | 84.083 | 1.7x | 535.6x |
+| Dail-Madsen | 0.006 | 0.306 | 569.993 | 51x | 94998.8x |
 
 The JAGS Dail-Madsen is expected to be substantially slower than RTMB. JAGS must sample the full latent state space — `N_it` and `S_it` at every site and time step — via Gibbs steps. RTMB avoids this entirely by marginalizing out the discrete states analytically via the forward algorithm. 
 
 ## JAGS MCMC Settings
 
 JAGS settings are configurable at the top of `run_all.R` and `run_all_parallel.R`. Occupancy and N-mixture use shorter chains; Dail-Madsen requires longer runs due to the complexity of its latent state space.
-
-| Setting | Occupancy & N-mixture | Dail-Madsen | Notes |
-|---|---|---|---|
-| `n.chains` | 4 | 4 | independent chains for convergence assessment |
-| `n.iter` | 20000 | 100000 | total iterations per chain including burnin |
-| `n.burnin` | 10000 | 50000 | discarded warmup iterations |
-| `n.thin` | 1 | 1 | thinning interval |
 
 ## MCMC Convergence Diagnostics
 
@@ -82,9 +75,9 @@ Convergence rates across simulations (proportion of fits with R-hat < 1.1 for al
 
 | Model | Convergence Rate |
 |---|---|
-| Occupancy | 1.00 |
-| N-mixture | 0.79 |
-| Dail-Madsen | 0.33 |
+| Occupancy | 1 |
+| N-mixture | 0.9 |
+| Dail-Madsen | 0.34 |
 
 The lower convergence rate for Dail-Madsen reflects the difficulty of sampling its high-dimensional latent state space — `N[i,t]`, `S[i,t]`, and `G[i,t]` must all be sampled explicitly via Gibbs steps at every site and time step. RTMB sidesteps this entirely by marginalizing out the discrete states via the forward algorithm. Convergence rates and per-simulation R-hat values are printed to the console and saved in `results/timing_summary.md` on each run.
 
