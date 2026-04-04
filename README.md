@@ -57,15 +57,11 @@ Mean time per fit (seconds), averaged over 100 simulations. JAGS timings include
 
 | Model | RTMB (s) | unmarked (s) | JAGS (s) | RTMB vs unmarked | RTMB vs JAGS |
 |---|---|---|---|---|---|
-| Occupancy | 0.044 | 0.021 | 6.437 | 0.5x | 146.3x |
-| N-mixture | 0.091 | 0.164 | 25.801 | 1.8x | 283.5x |
-| Dail-Madsen | 0.031 | 0.035 | 181.686 | 1.1x | 5860.8x |
+| Occupancy | 0.087 | 1.459 | 13.384 | 16.8x | 153.8x |
+| N-mixture | 0.154 | 0.268 | 42.055 | 1.7x | 273.1x |
+| Dail-Madsen | 0.006 | 0.328 | 273.608 | 54.7x | 45601.3x |
 
-*JAGS columns will be populated on first run.*
-
-The occupancy model in `unmarked` uses a closed-form marginal likelihood, requiring fewer function evaluations than RTMB's sequential reduction over {0,1}. `unmarked` is therefore expected to be faster for this specific case.
-
-The JAGS Dail-Madsen is expected to be substantially slower than RTMB. JAGS must sample the full latent state space — `N_it` and `S_it` at every site and time step — via Gibbs steps. RTMB avoids this entirely by marginalizing out the discrete states analytically via the forward algorithm, never touching the latent space during optimization. This difference in wall time is a central motivation for the RTMB approach.
+The JAGS Dail-Madsen is expected to be substantially slower than RTMB. JAGS must sample the full latent state space — `N_it` and `S_it` at every site and time step — via Gibbs steps. RTMB avoids this entirely by marginalizing out the discrete states analytically via the forward algorithm. 
 
 ## JAGS MCMC Settings
 
@@ -80,9 +76,9 @@ JAGS settings are configurable at the top of `run_all.R` and `run_all_parallel.R
 
 ## MCMC Convergence Diagnostics
 
-Convergence is assessed using the Gelman-Rubin potential scale reduction factor (R-hat; Gelman & Rubin 1992). R-hat compares within-chain to between-chain variance across the 4 independent chains — values near 1.0 indicate convergence, and a fit is flagged as converged when R-hat < 1.1 for all monitored parameters. Running multiple chains from dispersed initial values is essential: a single chain can appear to have converged while still exploring only a local region of the posterior.
+Convergence is assessed using the Gelman-Rubin potential scale reduction factor (R-hat; Gelman & Rubin 1992). R-hat compares within-chain to between-chain variance across the 4 independent chains — values near 1.0 indicate convergence, and a fit is flagged as converged when R-hat < 1.1 for all monitored parameters. 
 
-Convergence rates across 100 simulations (proportion of fits with R-hat < 1.1 for all parameters):
+Convergence rates across simulations (proportion of fits with R-hat < 1.1 for all parameters):
 
 | Model | Convergence Rate |
 |---|---|
@@ -90,10 +86,7 @@ Convergence rates across 100 simulations (proportion of fits with R-hat < 1.1 fo
 | N-mixture | 0.79 |
 | Dail-Madsen | 0.33 |
 
-The lower convergence rate for Dail-Madsen reflects the difficulty of sampling its high-dimensional latent state space — `N[i,t]`, `S[i,t]`, and `G[i,t]` must all be sampled explicitly via Gibbs steps at every site and time step. RTMB sidesteps this entirely by marginalizing out the discrete states via the forward algorithm, which is a central motivation for this work. Convergence rates and per-simulation R-hat values are printed to the console and saved in `results/timing_summary.md` on each run.
-
-### References
-- Gelman, A. and Rubin, D.B. (1992) Inference from Iterative Simulation Using Multiple Sequences. *Statistical Science* 7:457-472.
+The lower convergence rate for Dail-Madsen reflects the difficulty of sampling its high-dimensional latent state space — `N[i,t]`, `S[i,t]`, and `G[i,t]` must all be sampled explicitly via Gibbs steps at every site and time step. RTMB sidesteps this entirely by marginalizing out the discrete states via the forward algorithm. Convergence rates and per-simulation R-hat values are printed to the console and saved in `results/timing_summary.md` on each run.
 
 ## Repository Structure
 
@@ -178,4 +171,4 @@ This runs `install.R` which installs all required R packages (`RTMB`, `unmarked`
 - Dail, D. and Madsen, L. (2011) Models for Estimating Abundance from Repeated Counts of an Open Metapopulation. *Biometrics* 67:577-587.
 - MacKenzie, D.I. et al. (2002) Estimating Site Occupancy Rates When Detection Probabilities Are Less Than One. *Ecology* 83:2248-2255.
 - Royle, J.A. (2004) N-Mixture Models for Estimating Population Size from Spatially Replicated Counts. *Biometrics* 60:108-115.
-
+- Gelman, A. and Rubin, D.B. (1992) Inference from Iterative Simulation Using Multiple Sequences. *Statistical Science* 7:457-472.
