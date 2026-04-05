@@ -56,11 +56,14 @@ Mean time per fit (seconds), averaged over 500 simulations. JAGS timings include
 
 | Model | RTMB (s) | unmarked (s) | JAGS (s) | RTMB vs unmarked | RTMB vs JAGS |
 |---|---|---|---|---|---|
-| Occupancy | 0.087 | 2.067 | 28.888 | 23.8x | 332x |
-| N-mixture | 0.154 | 0.277 | 85.413 | 1.8x | 554.6x |
-| Dail-Madsen | 0.006 | 0.332 | 558.549 | 55.3x | 93091.5x |
+| Occupancy | 0.074 | 1.394 | 34.463 | 18.8x | 465.7x |
+| N-mixture | 0.128 | 0.281 | 94.816 | 2.2x | 740.8x |
+| Dail-Madsen | 0.004 | 0.331 | 632.695 | 82.8x | 158173.8x |
 
-The JAGS Dail-Madsen is expected to be substantially slower than RTMB. JAGS must sample the full latent state space — `N_it` and `S_it` at every site and time step — via Gibbs steps. RTMB avoids this entirely by marginalizing out the discrete states analytically via the forward algorithm. 
+The occupancy model in `unmarked` uses a closed-form marginal
+likelihood, requiring fewer function evaluations than RTMB's sequential
+reduction over {0,1}. `unmarked` is therefore expected to be faster for
+this specific case. The JAGS Dail-Madsen is expected to be substantially slower than RTMB. JAGS must sample the full latent state space — `N_it` and `S_it` at every site and time step — via Gibbs steps. RTMB is parameterizted to avoid this entirely by marginalizing out the discrete states analytically via the forward algorithm. 
 
 ## JAGS MCMC Settings
 
@@ -75,8 +78,8 @@ Convergence rates across simulations (proportion of fits with R-hat < 1.1 for al
 | Model | Convergence Rate |
 |---|---|
 | Occupancy | 1 |
-| N-mixture | 0.9 |
-| Dail-Madsen | 0.33 |
+| N-mixture | 0.92 |
+| Dail-Madsen | 0.37 |
 
 The lower convergence rate for Dail-Madsen reflects the difficulty of sampling its high-dimensional latent state space — `N[i,t]`, `S[i,t]`, and `G[i,t]` must all be sampled explicitly via Gibbs steps at every site and time step. RTMB sidesteps this entirely by marginalizing out the discrete states via the forward algorithm. Convergence rates and per-simulation R-hat values are printed to the console and saved in `results/timing_summary.md` on each run.
 

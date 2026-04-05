@@ -1,5 +1,5 @@
 | Model | RTMB (s) | unmarked (s) | JAGS (s) | RTMB vs unmarked | RTMB vs JAGS |
 |---|---|---|---|---|---|
-| Occupancy | 0.087 | 2.067 | 28.888 | 23.8x | 332x |
-| N-mixture | 0.154 | 0.277 | 85.413 | 1.8x | 554.6x |
-| Dail-Madsen | 0.006 | 0.332 | 558.549 | 55.3x | 93091.5x |
+| Occupancy | 0.074 | 1.394 | 34.463 | 18.8x | 465.7x |
+| N-mixture | 0.128 | 0.281 | 94.816 | 2.2x | 740.8x |
+| Dail-Madsen | 0.004 | 0.331 | 632.695 | 82.8x | 158173.8x |

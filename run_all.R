@@ -13,7 +13,7 @@ dir.create("figures", showWarnings = FALSE)
 # -----------------------------------------------------------
 # Simulation settings - edit here to control all models
 # -----------------------------------------------------------
-nsim <- 100
+nsim <- 500
 mc.cores <- detectCores() - 1
 # Occupancy
 occ_R <- 200
