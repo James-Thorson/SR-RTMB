@@ -7,7 +7,7 @@ Occupancy, N-mixture, and open population models such as the Dail-Madsen are amo
 git clone https://github.com/ChrisFishCahill/RTMBdre.git
 cd RTMBdre
 make install        # install required R packages (system JAGS must be installed first)
-time make           # sequential run
+time make           # run
 ```
 
 This runs the simulation and all results and plots are saved to `results/` and `figures/`.
@@ -56,9 +56,9 @@ Mean time per fit (seconds), averaged over 500 simulations. JAGS timings include
 
 | Model | RTMB (s) | unmarked (s) | JAGS (s) | RTMB vs unmarked | RTMB vs JAGS |
 |---|---|---|---|---|---|
-| Occupancy | 0.074 | 1.394 | 34.463 | 18.8x | 465.7x |
-| N-mixture | 0.128 | 0.281 | 94.816 | 2.2x | 740.8x |
-| Dail-Madsen | 0.004 | 0.331 | 632.695 | 82.8x | 158173.8x |
+| Occupancy | 0.075 | 1.522 | 34.037 | 20.3x | 453.8x |
+| N-mixture | 0.127 | 0.281 | 94.039 | 2.2x | 740.5x |
+| Dail-Madsen | 0.004 | 0.348 | 367.397 | 87x | 91849.2x |
 
 The occupancy model in `unmarked` uses a closed-form marginal
 likelihood, requiring fewer function evaluations than RTMB's sequential
@@ -79,8 +79,8 @@ Convergence rates across simulations (proportion of fits with R-hat < 1.1 for al
 | Model | Convergence Rate |
 |---|---|
 | Occupancy | 1 |
-| N-mixture | 0.92 |
-| Dail-Madsen | 0.37 |
+| N-mixture | 0.97 |
+| Dail-Madsen | 0.12 |
 
 The lower convergence rate for Dail-Madsen reflects the difficulty of sampling its high-dimensional latent state space — `N[i,t]`, `S[i,t]`, and `G[i,t]` must all be sampled explicitly via Gibbs steps at every site and time step. RTMB sidesteps this entirely by marginalizing out the discrete states via the forward algorithm. Convergence rates and per-simulation R-hat values are printed to the console and saved in `results/timing_summary.md` on each run.
 
@@ -104,7 +104,8 @@ Each model file contains RTMB, unmarked, and JAGS fits in a single internal work
 ## Usage
 
 ```bash
-make                                      # run all models sequentially via run_all.R
+make                                      # run all models in parallel via run_all_parallel.R
+make test                                 # run models sequentially via run_all.R
 make occupancy                            # run occupancy only one time
 make nmixture                             # run N-mixture only one time
 make dailmadsen                           # run Dail-Madsen only one time

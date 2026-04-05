@@ -40,7 +40,7 @@ jags_model_dm <- "
 model {
   # Priors
   lambda ~ dunif(0, 30)
-  gamma  ~ dunif(0, 100)
+  gamma  ~ dunif(0, 30)
   omega  ~ dunif(0, 1)
   p      ~ dunif(0, 1)
 

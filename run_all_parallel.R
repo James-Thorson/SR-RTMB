@@ -1,17 +1,16 @@
-# run_all.R
-# Sequential version - runs all models one at a time.
-# Usage: Rscript run_all.R
-#   or:  make
+# Run all scripts in parallel
 source("models/occupancy.R")
 source("models/nmixture.R")
 source("models/dail_madsen.R")
+library(parallel)
 Sys.setenv(OMP_NUM_THREADS = "4")
 dir.create("results", showWarnings = FALSE)
 dir.create("figures", showWarnings = FALSE)
 # -----------------------------------------------------------
 # Simulation settings - edit here to control all models
 # -----------------------------------------------------------
-nsim <- 5 # set to 500 for full run
+nsim <- 500
+mc.cores <- detectCores() - 1
 # Occupancy
 occ_R <- 200
 occ_T <- 5
@@ -41,14 +40,130 @@ jags_thin <- 1
 dm_jags_iter <- 60000
 dm_jags_burnin <- 50000
 # -----------------------------------------------------------
+# Parallel wrappers
+# Each sim gets seed + s so results are fully reproducible
+# -----------------------------------------------------------
+run_occupancy_par <- function(nsim, R, T, psi_true, p_true, seed,
+                              n.chains, n.iter, n.burnin, n.thin, mc.cores) {
+  raw <- mclapply(1:nsim, function(s) {
+    set.seed(seed + s)
+    fit_all_occ(s, R, T, psi_true, p_true,
+      n.chains = n.chains, n.iter = n.iter,
+      n.burnin = n.burnin, n.thin = n.thin
+    )
+  }, mc.cores = mc.cores)
+  estimates_all <- do.call(rbind, lapply(raw, function(x) x$estimates))
+  times_all <- data.frame(
+    rtmb = sapply(raw, function(x) x$time_rtmb),
+    unm  = sapply(raw, function(x) x$time_unm),
+    jags = sapply(raw, function(x) x$time_jags)
+  )
+  ok <- complete.cases(estimates_all) & complete.cases(times_all)
+  estimates <- as.data.frame(estimates_all[ok, ])
+  times <- times_all[ok, ]
+  conv_rate <- mean(sapply(raw, function(x) x$jags_converged), na.rm = TRUE)
+  list(
+    model = "occupancy", estimates = estimates, times = times,
+    truth = c(psi = psi_true, p = p_true),
+    jags_conv_rate = conv_rate, nsim = nsim, R = R, T = T
+  )
+}
+run_nmixture_par <- function(nsim, R, T, lambda_true, p_true, seed,
+                             n.chains, n.iter, n.burnin, n.thin, mc.cores) {
+  raw <- mclapply(1:nsim, function(s) {
+    set.seed(seed + s)
+    fit_all_nmix(s, R, T, lambda_true, p_true,
+      n.chains = n.chains, n.iter = n.iter,
+      n.burnin = n.burnin, n.thin = n.thin
+    )
+  }, mc.cores = mc.cores)
+  estimates_all <- do.call(rbind, lapply(raw, function(x) x$estimates))
+  times_all <- data.frame(
+    rtmb = sapply(raw, function(x) x$time_rtmb),
+    unm  = sapply(raw, function(x) x$time_unm),
+    jags = sapply(raw, function(x) x$time_jags)
+  )
+  ok <- complete.cases(estimates_all) & complete.cases(times_all)
+  estimates <- as.data.frame(estimates_all[ok, ])
+  times <- times_all[ok, ]
+  conv_rate <- mean(sapply(raw, function(x) x$jags_converged), na.rm = TRUE)
+  list(
+    model = "nmixture", estimates = estimates, times = times,
+    truth = c(lambda = lambda_true, p = p_true),
+    jags_conv_rate = conv_rate, nsim = nsim, R = R, T = T
+  )
+}
+run_dailmadsen_par <- function(nsim, M, T, lambda_true, gamma_true, omega_true,
+                               p_true, seed, n.chains, n.iter, n.burnin, n.thin,
+                               mc.cores) {
+  datasets <- lapply(1:nsim, function(s) {
+    set.seed(seed + s)
+    sim_dm(M, T, lambda_true, gamma_true, omega_true, p_true)
+  })
+  time_rtmb <- system.time({
+    res_rtmb <- mclapply(datasets, function(y) {
+      tryCatch(fit_rtmb(y),
+        error = function(e) c(lambda = NA, gamma = NA, omega = NA, p = NA)
+      )
+    }, mc.cores = mc.cores)
+  })
+  time_unm <- system.time({
+    res_unm <- mclapply(datasets, function(y) {
+      tryCatch(fit_unm(y),
+        error = function(e) c(lambda = NA, gamma = NA, omega = NA, p = NA)
+      )
+    }, mc.cores = mc.cores)
+  })
+  jags_raw <- mclapply(datasets, function(y) {
+    t <- system.time({
+      out <- fit_jags_dm(y,
+        n.chains = n.chains, n.iter = n.iter,
+        n.burnin = n.burnin, n.thin = n.thin,
+        lambda_true = lambda_true
+      )
+    })
+    list(
+      estimates = out$estimates, jags_converged = out$jags_converged,
+      time_jags = t["elapsed"]
+    )
+  }, mc.cores = mc.cores)
+  res_rtmb <- na.omit(as.data.frame(do.call(rbind, res_rtmb)))
+  res_unm <- na.omit(as.data.frame(do.call(rbind, res_unm)))
+  res_jags <- na.omit(as.data.frame(
+    do.call(rbind, lapply(jags_raw, function(x) x$estimates))
+  ))
+  names(res_rtmb) <- c("lambda", "gamma", "omega", "p")
+  names(res_unm) <- c("lambda", "gamma", "omega", "p")
+  names(res_jags) <- c("lambda", "gamma", "omega", "p")
+  jags_times <- sapply(jags_raw, function(x) x$time_jags)
+  conv_rate <- mean(sapply(jags_raw, function(x) x$jags_converged), na.rm = TRUE)
+  list(
+    model = "dailmadsen",
+    estimates_rtmb = res_rtmb, estimates_unm = res_unm, estimates_jags = res_jags,
+    times = data.frame(
+      rtmb = time_rtmb["elapsed"],
+      unm  = time_unm["elapsed"],
+      jags = sum(jags_times, na.rm = TRUE)
+    ),
+    jags_times_per_sim = jags_times,
+    jags_conv_rate = conv_rate,
+    truth = c(
+      lambda = lambda_true, gamma = gamma_true,
+      omega = omega_true, p = p_true
+    ),
+    nsim = nsim, M = M, T = T
+  )
+}
+# -----------------------------------------------------------
 # Run models
 # -----------------------------------------------------------
-cat("Running occupancy model...\n")
-res_occ <- run_occupancy(
+cat("Running occupancy model (", mc.cores, "cores )...\n")
+res_occ <- run_occupancy_par(
   nsim = nsim, R = occ_R, T = occ_T,
   psi_true = occ_psi, p_true = occ_p, seed = occ_seed,
   n.chains = jags_chains, n.iter = jags_iter,
-  n.burnin = jags_burnin, n.thin = jags_thin
+  n.burnin = jags_burnin, n.thin = jags_thin,
+  mc.cores = mc.cores
 )
 saveRDS(res_occ, "results/occupancy.rds")
 cat(
@@ -58,12 +173,13 @@ cat(
   "Mean JAGS time:", round(mean(res_occ$times$jags, na.rm = TRUE), 3), "s |",
   "JAGS conv rate:", round(res_occ$jags_conv_rate, 3), "\n\n"
 )
-cat("Running N-mixture model...\n")
-res_nmix <- run_nmixture(
+cat("Running N-mixture model (", mc.cores, "cores )...\n")
+res_nmix <- run_nmixture_par(
   nsim = nsim, R = nmix_R, T = nmix_T,
   lambda_true = nmix_lambda, p_true = nmix_p, seed = nmix_seed,
   n.chains = jags_chains, n.iter = jags_iter,
-  n.burnin = jags_burnin, n.thin = jags_thin
+  n.burnin = jags_burnin, n.thin = jags_thin,
+  mc.cores = mc.cores
 )
 saveRDS(res_nmix, "results/nmixture.rds")
 cat(
@@ -73,13 +189,14 @@ cat(
   "Mean JAGS time:", round(mean(res_nmix$times$jags, na.rm = TRUE), 3), "s |",
   "JAGS conv rate:", round(res_nmix$jags_conv_rate, 3), "\n\n"
 )
-cat("Running Dail-Madsen model...\n")
-res_dm <- run_dailmadsen(
+cat("Running Dail-Madsen model (", mc.cores, "cores )...\n")
+res_dm <- run_dailmadsen_par(
   nsim = nsim, M = dm_M, T = dm_T,
   lambda_true = dm_lambda, gamma_true = dm_gamma,
   omega_true = dm_omega, p_true = dm_p, seed = dm_seed,
   n.chains = jags_chains, n.iter = dm_jags_iter,
-  n.burnin = dm_jags_burnin, n.thin = jags_thin
+  n.burnin = dm_jags_burnin, n.thin = jags_thin,
+  mc.cores = mc.cores
 )
 saveRDS(res_dm, "results/dail_madsen.rds")
 cat(

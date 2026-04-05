@@ -1,5 +1,5 @@
 # install.R
-# Installs all R packages required to run the RTMB-dre repository.
+# Installs all R packages required to run the RTMBdre repository.
 # Usage: Rscript install.R
 #   or:  make install
 #

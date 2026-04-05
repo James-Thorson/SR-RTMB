@@ -25,7 +25,7 @@ library(R2jags)
 jags_model_nmix <- "
 model {
   # Priors
-  lambda ~ dunif(0, 500)
+  lambda ~ dunif(0, 80)
   p      ~ dunif(0, 1)
 
   # Likelihood

@@ -49,7 +49,7 @@ sim_data_occ <- function(R, T, psi, p) {
 
 fit_all_occ <- function(s, R, T, psi_true, p_true,
                         n.chains = 3, n.iter = 5000, n.burnin = 2500, n.thin = 1) {
-  on.exit(gc())
+  gc() # get rid of residual JAGS misery
   dat <- sim_data_occ(R, T, psi_true, p_true)
   y <- dat$y
 
