@@ -39,7 +39,7 @@ y_it | N_it ~ Binomial(N_it, p)
 ```
 
 ## Results
-Histograms represent distributions of estimates from 100 simulated datasets. For RTMB and unmarked these are maximum likelihood estimates; for JAGS these are posterior means. True values used for simulation are indicated by the red vertical lines.
+Histograms represent distributions of estimates from 500 simulated datasets. For RTMB and unmarked these are maximum likelihood estimates; for JAGS these are posterior means. True values used for simulation are indicated by the red vertical lines.
 
 ### Occupancy
 ![Occupancy](figures/occupancy.png)
@@ -65,6 +65,7 @@ likelihood, requiring fewer function evaluations than RTMB's sequential
 reduction over {0,1}. `unmarked` is therefore expected to be faster for
 this specific case. The JAGS Dail-Madsen is expected to be substantially slower than RTMB. JAGS must sample the full latent state space — `N_it` and `S_it` at every site and time step — via Gibbs steps. RTMB is parameterizted to avoid this entirely by marginalizing out the discrete states analytically via the forward algorithm. 
 
+TODO: CHECK THESE RUN TIMES!!!
 ## JAGS MCMC Settings
 
 JAGS settings are configurable at the top of `run_all.R` and `run_all_parallel.R`. Occupancy and N-mixture use shorter chains; Dail-Madsen requires longer runs due to the complexity of its latent state space.
