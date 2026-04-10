@@ -39,8 +39,8 @@ library(R2jags)
 jags_model_dm <- "
 model {
   # Priors
-  lambda ~ dunif(0, 500)
-  gamma  ~ dunif(0, 100)
+  lambda ~ dunif(0, 30)
+  gamma  ~ dunif(0, 30)
   omega  ~ dunif(0, 1)
   p      ~ dunif(0, 1)
 
@@ -76,18 +76,18 @@ sim_dm <- function(M, T, lambda, gamma, omega, p) {
 }
 
 fit_rtmb <- function(y) {
-  M  <- nrow(y)
-  T  <- ncol(y)
-  K  <- max(y) * 2
+  M <- nrow(y)
+  T <- ncol(y)
+  K <- max(y) * 2
   ks <- 0:K
   dat <- list(y = y, M = M, T = T, K = K, ks = ks)
 
   f <- function(par) {
     getAll(par, dat)
     lambda <- exp(log_lambda)
-    gamma  <- exp(log_gamma)
-    omega  <- plogis(logit_omega)
-    p      <- plogis(logit_p)
+    gamma <- exp(log_gamma)
+    omega <- plogis(logit_omega)
+    p <- plogis(logit_p)
 
     # build transition matrix P(N_t+1=m | N_t=n)
     # rows = N_t=n, cols = N_t+1=m
@@ -124,11 +124,14 @@ fit_rtmb <- function(y) {
   )
 
   obj <- tryCatch(MakeADFun(f, par), error = function(e) NULL)
-  if (is.null(obj)) return(c(lambda = NA, gamma = NA, omega = NA, p = NA))
+  if (is.null(obj)) {
+    return(c(lambda = NA, gamma = NA, omega = NA, p = NA))
+  }
 
   opt <- tryCatch(nlminb(obj$par, obj$fn, obj$gr), error = function(e) NULL)
-  if (is.null(opt) || opt$convergence != 0)
+  if (is.null(opt) || opt$convergence != 0) {
     return(c(lambda = NA, gamma = NA, omega = NA, p = NA))
+  }
 
   result <- c(
     exp(opt$par["log_lambda"]),
@@ -141,13 +144,15 @@ fit_rtmb <- function(y) {
 }
 
 fit_unm <- function(y) {
-  K   <- max(y) * 2
+  K <- max(y) * 2
   umf <- unmarkedFramePCO(y = y, numPrimary = ncol(y))
   fit <- tryCatch(
     suppressWarnings(pcountOpen(~1, ~1, ~1, ~1, data = umf, K = K, se = FALSE)),
     error = function(e) NULL
   )
-  if (is.null(fit)) return(c(lambda = NA, gamma = NA, omega = NA, p = NA))
+  if (is.null(fit)) {
+    return(c(lambda = NA, gamma = NA, omega = NA, p = NA))
+  }
 
   result <- c(
     exp(coef(fit, "lambda")),
@@ -160,9 +165,9 @@ fit_unm <- function(y) {
 }
 
 fit_jags_dm <- function(y, n.chains, n.iter, n.burnin, n.thin,
-                         lambda_true) {
-  M  <- nrow(y)
-  T  <- ncol(y)
+                        lambda_true) {
+  M <- nrow(y)
+  T <- ncol(y)
 
   model_file <- file.path(tempdir(), "jags_model_dm.txt")
   writeLines(jags_model_dm, model_file)
@@ -170,37 +175,41 @@ fit_jags_dm <- function(y, n.chains, n.iter, n.burnin, n.thin,
   # N[i,t] for t>=2 is a deterministic node (N <- S+G), cannot be initialised.
   # Only stochastic nodes need inits: N[i,1], S[i,t>=2], G[i,t>=2].
   N1_init <- pmax(apply(y, 1, max) + 2L, y[, 1] + 1L)
-  S_init  <- matrix(NA_integer_, M, T)
-  G_init  <- matrix(NA_integer_, M, T)
-  N_prev  <- N1_init
+  S_init <- matrix(NA_integer_, M, T)
+  G_init <- matrix(NA_integer_, M, T)
+  N_prev <- N1_init
   for (t in 2:T) {
     S_init[, t] <- pmin(N_prev, round(N_prev * 0.8))
     G_init[, t] <- pmax(1L, y[, t] + 1L)
-    N_prev      <- S_init[, t] + G_init[, t]
+    N_prev <- S_init[, t] + G_init[, t]
   }
 
-  jags_data  <- list(y = y, M = M, T = T)
-  jags_inits <- function() list(
-    lambda = runif(1, 1, lambda_true * 2),
-    gamma  = runif(1, 0.5, 3),
-    omega  = runif(1, 0.5, 0.99),
-    p      = runif(1, 0.1, 0.9),
-    N      = cbind(N1_init, matrix(NA_integer_, M, T - 1)),
-    S      = S_init,
-    G      = G_init
-  )
+  jags_data <- list(y = y, M = M, T = T)
+  jags_inits <- function() {
+    list(
+      lambda = runif(1, 1, lambda_true * 2),
+      gamma  = runif(1, 0.5, 3),
+      omega  = runif(1, 0.5, 0.99),
+      p      = runif(1, 0.1, 0.9),
+      N      = cbind(N1_init, matrix(NA_integer_, M, T - 1)),
+      S      = S_init,
+      G      = G_init
+    )
+  }
 
   fit <- tryCatch(
     suppressWarnings(
-      jags(data               = jags_data,
-                    inits              = jags_inits,
-                    parameters.to.save = c("lambda", "gamma", "omega", "p"),
-                    model.file         = model_file,
-                    n.chains           = n.chains,
-                    n.iter             = n.iter,
-                    n.burnin           = n.burnin,
-                    n.thin             = n.thin,
-                    progress.bar       = "none")
+      jags(
+        data = jags_data,
+        inits = jags_inits,
+        parameters.to.save = c("lambda", "gamma", "omega", "p"),
+        model.file = model_file,
+        n.chains = n.chains,
+        n.iter = n.iter,
+        n.burnin = n.burnin,
+        n.thin = n.thin,
+        progress.bar = "none"
+      )
     ),
     error = function(e) NULL
   )
@@ -212,16 +221,16 @@ fit_jags_dm <- function(y, n.chains, n.iter, n.burnin, n.thin,
     ))
   }
 
-  sums      <- fit$BUGSoutput$summary
-  rhats     <- sums[rownames(sums) != "deviance", "Rhat"]
+  sums <- fit$BUGSoutput$summary
+  rhats <- sums[rownames(sums) != "deviance", "Rhat"]
   converged <- all(rhats < 1.1, na.rm = TRUE)
 
   list(
     estimates = c(
       lambda = sums["lambda", "mean"],
-      gamma  = sums["gamma",  "mean"],
-      omega  = sums["omega",  "mean"],
-      p      = sums["p",      "mean"]
+      gamma  = sums["gamma", "mean"],
+      omega  = sums["omega", "mean"],
+      p      = sums["p", "mean"]
     ),
     jags_converged = converged
   )
@@ -234,71 +243,81 @@ run_dailmadsen <- function(nsim = 1, M = 100, T = 5,
                            n.chains = 3, n.iter = 5000,
                            n.burnin = 2500, n.thin = 1) {
   set.seed(seed)
-  datasets <- lapply(1:nsim, function(s)
-    sim_dm(M, T, lambda_true, gamma_true, omega_true, p_true))
+  datasets <- lapply(1:nsim, function(s) {
+    sim_dm(M, T, lambda_true, gamma_true, omega_true, p_true)
+  })
 
   # RTMB - all datasets timed together (matches original behaviour)
   time_rtmb <- system.time({
-    res_rtmb <- lapply(datasets, function(y)
+    res_rtmb <- lapply(datasets, function(y) {
       tryCatch(fit_rtmb(y),
-               error = function(e) c(lambda = NA, gamma = NA, omega = NA, p = NA)))
+        error = function(e) c(lambda = NA, gamma = NA, omega = NA, p = NA)
+      )
+    })
   })
 
   # unmarked - all datasets timed together
   time_unm <- system.time({
-    res_unm <- lapply(datasets, function(y)
+    res_unm <- lapply(datasets, function(y) {
       tryCatch(fit_unm(y),
-               error = function(e) c(lambda = NA, gamma = NA, omega = NA, p = NA)))
+        error = function(e) c(lambda = NA, gamma = NA, omega = NA, p = NA)
+      )
+    })
   })
 
   # JAGS - each dataset timed individually so per-sim times are available
   jags_raw <- lapply(datasets, function(y) {
     t <- system.time({
       out <- fit_jags_dm(y,
-                         n.chains   = n.chains,
-                         n.iter     = n.iter,
-                         n.burnin   = n.burnin,
-                         n.thin     = n.thin,
-                         lambda_true = lambda_true)
+        n.chains = n.chains,
+        n.iter = n.iter,
+        n.burnin = n.burnin,
+        n.thin = n.thin,
+        lambda_true = lambda_true
+      )
     })
-    list(estimates      = out$estimates,
-         jags_converged = out$jags_converged,
-         time_jags      = t["elapsed"])
+    list(
+      estimates = out$estimates,
+      jags_converged = out$jags_converged,
+      time_jags = t["elapsed"]
+    )
   })
 
   res_rtmb <- as.data.frame(do.call(rbind, res_rtmb))
-  res_unm  <- as.data.frame(do.call(rbind, res_unm))
+  res_unm <- as.data.frame(do.call(rbind, res_unm))
   res_jags <- as.data.frame(
     do.call(rbind, lapply(jags_raw, function(x) x$estimates))
   )
   names(res_rtmb) <- c("lambda", "gamma", "omega", "p")
-  names(res_unm)  <- c("lambda", "gamma", "omega", "p")
+  names(res_unm) <- c("lambda", "gamma", "omega", "p")
   names(res_jags) <- c("lambda", "gamma", "omega", "p")
 
   # Drop the same simulation indices from all three frameworks so estimates
   # always correspond to the same dataset - critical for fair comparison
   ok <- complete.cases(res_rtmb) & complete.cases(res_unm) & complete.cases(res_jags)
   res_rtmb <- res_rtmb[ok, ]
-  res_unm  <- res_unm[ok, ]
+  res_unm <- res_unm[ok, ]
   res_jags <- res_jags[ok, ]
 
-  jags_times    <- sapply(jags_raw, function(x) x$time_jags)
-  conv_rate     <- mean(sapply(jags_raw, function(x) x$jags_converged), na.rm = TRUE)
+  jags_times <- sapply(jags_raw, function(x) x$time_jags)
+  conv_rate <- mean(sapply(jags_raw, function(x) x$jags_converged), na.rm = TRUE)
 
   list(
-    model          = "dailmadsen",
+    model = "dailmadsen",
     estimates_rtmb = res_rtmb,
-    estimates_unm  = res_unm,
+    estimates_unm = res_unm,
     estimates_jags = res_jags,
     times = data.frame(
       rtmb = time_rtmb["elapsed"],
       unm  = time_unm["elapsed"],
-      jags = sum(jags_times, na.rm = TRUE)  # total wall time, matches rtmb/unm convention
+      jags = sum(jags_times, na.rm = TRUE) # total wall time, matches rtmb/unm convention
     ),
     jags_times_per_sim = jags_times,
     jags_conv_rate = conv_rate,
-    truth = c(lambda = lambda_true, gamma = gamma_true,
-              omega  = omega_true,  p     = p_true),
+    truth = c(
+      lambda = lambda_true, gamma = gamma_true,
+      omega = omega_true, p = p_true
+    ),
     nsim = nsim, M = M, T = T
   )
 }
@@ -308,8 +327,8 @@ if (sys.nframe() == 0) {
   res <- run_dailmadsen()
   dir.create("results", showWarnings = FALSE)
   saveRDS(res, "results/dail_madsen.rds")
-  cat("Total RTMB time:",    res$times$rtmb, "s\n")
-  cat("Total unmarked time:", res$times$unm,  "s\n")
-  cat("Total JAGS time:",    res$times$jags, "s\n")
+  cat("Total RTMB time:", res$times$rtmb, "s\n")
+  cat("Total unmarked time:", res$times$unm, "s\n")
+  cat("Total JAGS time:", res$times$jags, "s\n")
   cat("JAGS convergence rate:", round(res$jags_conv_rate, 3), "\n")
 }

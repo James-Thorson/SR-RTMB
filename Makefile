@@ -3,11 +3,11 @@
 all: run
 
 # run all models sequentially
-run:
+test:
 	Rscript run_all.R
 
 # run all models in parallel (one sim per core)
-parallel:
+run:
 	Rscript run_all_parallel.R
 
 # run individual models

@@ -1,5 +1,5 @@
 # install.R
-# Installs all R packages required to run the RTMB-dre repository.
+# Installs all R packages required to run the RTMBdre repository.
 # Usage: Rscript install.R
 #   or:  make install
 #
@@ -9,10 +9,11 @@
 #   Windows/other: https://mcmc-jags.sourceforge.io
 
 pkgs <- c(
-  "RTMB",       # automatic differentiation + SR/forward algorithm
-  "unmarked",   # MLE benchmark for occupancy, N-mixture, Dail-Madsen
-  "R2jags",     # JAGS interface (requires system JAGS)
-  "fmesher"     # SPDE mesh construction for spatial Dail-Madsen
+  "RTMB", # automatic differentiation + SR/forward algorithm
+  "unmarked", # MLE benchmark for occupancy, N-mixture, Dail-Madsen
+  "R2jags", # JAGS interface (requires system JAGS)
+  "fmesher", # SPDE mesh construction for spatial Dail-Madsen
+  "parallel"
 )
 
 to_install <- pkgs[!pkgs %in% rownames(installed.packages())]
