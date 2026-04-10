@@ -12,6 +12,8 @@ time make           # run
 
 This runs the simulation and all results and plots are saved to `results/` and `figures/`.
 
+[View Sequential Reduction Demo](https://chrisfishcahill.github.io/RTMBdre/sequential_reduction_demo.html)
+
 ## Models
 
 ### Occupancy (MacKenzie et al. 2002)
