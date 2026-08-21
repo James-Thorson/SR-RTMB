@@ -1,0 +1,173 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1.25in]{geometry}
+\usepackage{amsmath, amsfonts, amssymb}
+\usepackage{subfig}
+\usepackage[dvipsnames]{xcolor}
+\definecolor{niceblue}{HTML}{236899}
+
+\newcommand{\rev}[1]{{\color{niceblue} #1}}
+
+\usepackage{hyperref}
+\usepackage{nameref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    filecolor=black,      
+    urlcolor=niceblue,
+    citecolor=niceblue,
+    linkbordercolor = white
+}
+\usepackage{amsbsy}
+\usepackage{epsfig}
+\usepackage{subfig}
+\usepackage{bm}
+\usepackage{xspace}
+\usepackage{color}
+\usepackage{subfloat}
+\usepackage{lineno}
+\usepackage{ragged2e}
+\usepackage{placeins}
+\usepackage{comment}
+
+\makeatletter
+\let\LN@align\align
+\let\LN@endalign\endalign
+\renewcommand{\align}{\linenomath\LN@align}
+\renewcommand{\endalign}{\LN@endalign\endlinenomath}
+\let\LN@gather\gather
+\let\LN@endgather\endgather
+\renewcommand{\gather}{\linenomath\LN@gather}
+\renewcommand{\endgather}{\LN@endgather\endlinenomath}
+\makeatother
+
+\widowpenalty10000
+\clubpenalty10000
+
+\definecolor{darkgrey}{HTML}{A9A9A9}
+\renewcommand\linenumberfont{\normalfont\bfseries\small\color{darkgrey}}
+\modulolinenumbers[1]
+
+\usepackage{booktabs}
+\usepackage[round]{natbib}
+\bibliographystyle{fishfish}
+\bibpunct{(}{)}{,}{a}{}{,}
+\usepackage{authblk}
+\usepackage{pdflscape}
+
+% Linux Libertine:
+\usepackage{textcomp}
+\usepackage[sb]{libertine}
+\usepackage[varqu,varl]{inconsolata}% sans serif typewriter
+\usepackage[libertine,bigdelims,vvarbb]{newtxmath} % bb from STIX
+\usepackage[cal=boondoxo]{mathalfa} % mathcal
+\useosf % osf for text, not math
+%\usepackage[supstfm=libertinesups,%
+%  supscaled=1.2,%
+%  raised=-.13em]{superiors}
+% ML: Eerrm supstfm does not work in this specific file?! https://tex.stackexchange.com/questions/568135/why-can-i-not-use-the-superiors-package-with-any-options
+\usepackage[supsfam=libertinesups,supscaled=1.2,raised=-.13em]{superiors}
+\usepackage{setspace}
+
+% for table formatting
+\usepackage{array}
+\newcolumntype{^}{>{\currentrowstyle}}
+
+\newcommand{\PreserveBackslash}[1]{\let\temp=\\#1\let\\=\temp}
+\newcolumntype{C}[1]{>{\PreserveBackslash\centering}p{#1}}
+\newcolumntype{R}[1]{>{\PreserveBackslash\raggedleft}p{#1}}
+\newcolumntype{L}[1]{>{\PreserveBackslash\raggedright}p{#1}}
+
+\newcommand{\ml}[1]{{\color{red}#1}}
+\newcommand{\sa}[1]{{\color{blue}#1}}
+\newcommand{\jt}[1]{{\color{teal}#1}}
+% other colours: orange, magenta, sky blue, purple, grey
+
+\newcommand*{\TitleFont}{%
+      \usefont{\encodingdefault}{\rmdefault}{b}{n}%
+      \fontsize{13}{15}%
+      \selectfont}
+      
+\newcommand{\R}[1]{\label{#1}\linelabel{#1}}
+% \newcommand{\lr}[1]{page~\pageref{#1}, line~\lineref{#1}}
+\newcommand{\lr}[1]{line~\lineref{#1}}
+
+\date{}
+
+% % Paper title
+\title{
+Estimating continuous and discrete latent variables in ecological and evolutionary models using sequential reduction and automatic differentiation
+}
+
+% Tentative order 
+\author[1,*]{Chris Cahill} % ORCID: 0000-0002-3841-4044
+\author[2]{James T. Thorson} % 0000-0001-9563-1937
+\author[3]{Kasper Kristensen} % 0000-0001-7415-1010
+
+\affil[1]{}
+\affil[2]{}
+\affil[3]{}
+%\input{values} % R output
+
+\doublespacing
+\begin{document}
+%\begin{spacing}{1.5}
+\maketitle
+\vspace{-1.5em} % adjust this as needed (e.g., -1em or -2em)
+\noindent
+\textbf{Corresponding author:} \href{mailto:max.lindmark@slu.se}{christopherfishcahill@gmail.com}
+
+\noindent
+\textbf{Acknowledgments:} The authors have no conflicts of interests to declare.
+
+\noindent
+\textbf{Conflict of Interest:} The authors have no conflicts to declare. 
+
+\noindent
+\textbf{Author contributions:} 
+
+\noindent
+\textbf{Data Availability Statement:} 
+
+\noindent
+\textbf{Funding:}
+
+
+\noindent
+% Running head - 40 characters:
+\textbf{Running head:} Sequent reduction for hierarchical models\\
+
+\clearpage
+\linenumbers % a bit faster to compile with these turned off
+\setcounter{secnumdepth}{0} % Removes section numbers
+
+% \setstretch{2}
+
+% for ices: 350 word limit for MEE (currently 350)
+\section{Abstract}
+
+Ecologists develop statistical models to represent a wide variety of ecological and evolutionary dynamics.  These models often include latent variables (e.g., site-specific abundance, or categorical traits for ancestral species), and these latent variables can be either continuous (e.g., body size) or discrete (site-specific abundance).  Here, we show that both continuous and discrete-valued latent variables can be included in hierarchical models while using maximum likelihood for fast parameter estimation.  We specifically use RTMB, which requires a user-specified computation for the joint probability of system dynamics (e.g., the distribution for latent variables) and measurements (e.g., the distribution for data given latent variables).  RTMB then uses sequential reduction to marginalize across discrete variables and the Laplace approximation to integrate across continuous latent variables.  We specifically demonstrate the speed and flexibility for this combination of sequential reduction and Laplace approximation using demographic (dynamic occupancy, N-mixture, open dynamic N-mixture) and evolutionary (state-switching for a binary trait across a phylogeny) examples.  The demographic models closely match estimates from the alternative \textit{unmarked} package, while the evolutionary state-switching model allows ancestral trait reconstruction across a large phylogeny for fishes.  We therefore recommend that ecologists adapt maximum-likelihood estimation for hierarchical models involving both discrete and continuous variables.  
+
+
+\vspace*{\fill}
+\noindent
+Keywords: Sequential reduction; hierarchical model; automatic differentiation; Laplace approximation
+
+\clearpage
+
+\section{Introduction}
+
+\section{Methods}
+
+
+\section{Results}
+
+\section{Discussion}
+
+
+\bibliography{bib}
+
+% \end{spacing}
+
+
+\end{document}
