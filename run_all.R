@@ -11,7 +11,7 @@ dir.create("figures", showWarnings = FALSE)
 # -----------------------------------------------------------
 # Simulation settings - edit here to control all models
 # -----------------------------------------------------------
-nsim <- 5 # set to 500 for full run
+nsim <- 100
 # Occupancy
 occ_R <- 200
 occ_T <- 5

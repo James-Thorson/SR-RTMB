@@ -9,7 +9,7 @@ dir.create("figures", showWarnings = FALSE)
 # -----------------------------------------------------------
 # Simulation settings - edit here to control all models
 # -----------------------------------------------------------
-nsim <- 500
+nsim <- 100
 mc.cores <- detectCores() - 1
 # Occupancy
 occ_R <- 200
@@ -100,20 +100,26 @@ run_dailmadsen_par <- function(nsim, M, T, lambda_true, gamma_true, omega_true,
     set.seed(seed + s)
     sim_dm(M, T, lambda_true, gamma_true, omega_true, p_true)
   })
-  time_rtmb <- system.time({
-    res_rtmb <- mclapply(datasets, function(y) {
-      tryCatch(fit_rtmb(y),
+  rtmb_raw <- mclapply(datasets, function(y) {
+    t <- system.time({
+      out <- tryCatch(fit_rtmb(y),
         error = function(e) c(lambda = NA, gamma = NA, omega = NA, p = NA)
       )
-    }, mc.cores = mc.cores)
-  })
-  time_unm <- system.time({
-    res_unm <- mclapply(datasets, function(y) {
-      tryCatch(fit_unm(y),
+    })
+    list(estimate = out, time = t["elapsed"])
+  }, mc.cores = mc.cores)
+  res_rtmb <- lapply(rtmb_raw, function(x) x$estimate)
+  rtmb_times <- sapply(rtmb_raw, function(x) x$time)
+  unm_raw <- mclapply(datasets, function(y) {
+    t <- system.time({
+      out <- tryCatch(fit_unm(y),
         error = function(e) c(lambda = NA, gamma = NA, omega = NA, p = NA)
       )
-    }, mc.cores = mc.cores)
-  })
+    })
+    list(estimate = out, time = t["elapsed"])
+  }, mc.cores = mc.cores)
+  res_unm <- lapply(unm_raw, function(x) x$estimate)
+  unm_times <- sapply(unm_raw, function(x) x$time)
   jags_raw <- mclapply(datasets, function(y) {
     t <- system.time({
       out <- fit_jags_dm(y,
@@ -141,10 +147,12 @@ run_dailmadsen_par <- function(nsim, M, T, lambda_true, gamma_true, omega_true,
     model = "dailmadsen",
     estimates_rtmb = res_rtmb, estimates_unm = res_unm, estimates_jags = res_jags,
     times = data.frame(
-      rtmb = time_rtmb["elapsed"],
-      unm  = time_unm["elapsed"],
+      rtmb = sum(rtmb_times, na.rm = TRUE),
+      unm  = sum(unm_times, na.rm = TRUE),
       jags = sum(jags_times, na.rm = TRUE)
     ),
+    rtmb_times_per_sim = rtmb_times,
+    unm_times_per_sim = unm_times,
     jags_times_per_sim = jags_times,
     jags_conv_rate = conv_rate,
     truth = c(
@@ -417,4 +425,3 @@ plot_hist(
 par(op)
 dev.off()
 cat("\nAll figures saved to figures/\n")
-
