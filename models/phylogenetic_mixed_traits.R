@@ -4,7 +4,7 @@
 #################
 
 data_dir = R'(C:\Users\jtuth\Documents\GitHub\RTMBdre\data)'
-results_dir = R'(C:\Users\jtuth\Documents\GitHub\RTMBdre\results)'
+results_dir = R'(C:\Users\jtuth\Documents\GitHub\RTMBdre\figures)'
 
 library(RTMB)
 library(ape)
@@ -55,10 +55,17 @@ p = list(
 )
 map$finvrho = factor(NA)
 
+make_onehot <- function(n) {
+  old <- TapeConfig()
+  on.exit(TapeConfig(old))
+  TapeConfig(comparison="tape")
+  MakeTape(function(x) x==(1:n), 1)
+}
+onehot_comparison = make_onehot(2)
 onehot <-
 function( level,  # Count from zero
           nlevels = 2,
-          type = c("abs", "index") ){
+          type = c("abs", "index", "comparison") ){
 
   "[<-" <- ADoverload("[<-")
   "c" <- ADoverload("c")
@@ -71,11 +78,14 @@ function( level,  # Count from zero
     vec = rep(0, nlevels)
     vec[level + 1] = 1
   }
+  if(type == "comparison"){
+    vec = onehot_comparison(level + 1)
+  }
   return(vec)
 }
 
 #
-onehot_type = c("abs", "index")[1]
+onehot_type = c("abs", "index", "comparison")[3]
 get_jnll = function(p, what = "jnll"){
   "[<-" <- ADoverload("[<-")
   "c" <- ADoverload("c")
