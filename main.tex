@@ -96,7 +96,7 @@
 
 % % Paper title
 \title{
-Estimating continuous and discrete latent variables in ecological and evolutionary models using sequential reduction and automatic differentiation
+Automated sequential reduction for continuous and discrete latent variables in ecological and evolutionary models using automatic differentiation and RTMB
 }
 
 % Tentative order 
@@ -146,7 +146,7 @@ Estimating continuous and discrete latent variables in ecological and evolutiona
 % for ices: 350 word limit for MEE (currently 350)
 \section{Abstract}
 
-Ecologists develop statistical models to represent a wide variety of ecological and evolutionary dynamics.  These models often include latent variables (e.g., site-specific abundance, or categorical traits for ancestral species), and these latent variables can be either continuous (e.g., body size) or discrete (site-specific abundance).  Here, we show that both continuous and discrete-valued latent variables can be included in hierarchical models while using maximum likelihood for fast parameter estimation.  We specifically use RTMB, which requires a user-specified computation for the joint probability of system dynamics (e.g., the distribution for latent variables) and measurements (e.g., the distribution for data given latent variables).  RTMB then uses sequential reduction to marginalize across discrete variables and the Laplace approximation to integrate across continuous latent variables.  We specifically demonstrate the speed and flexibility for this combination of sequential reduction and Laplace approximation using demographic (dynamic occupancy, N-mixture, open dynamic N-mixture) and evolutionary (state-switching for a binary trait across a phylogeny) examples.  The demographic models closely match estimates from the alternative \textit{unmarked} package, while the evolutionary state-switching model allows ancestral trait reconstruction across a large phylogeny for fishes.  We therefore recommend that ecologists adapt maximum-likelihood estimation for hierarchical models involving both discrete and continuous variables.  
+Statistical models representing ecological and evolutionary dynamics often include latent variables, which can be either continuous- (e.g., average body size) or discrete-valued (numerical abundance).  Ecologists often implement mixed-type hierarchical models using Markov chain Monte Carlo (MCMC), but this can be prohibitively slow for large models.  Here, we introduce an alternative approach in the R-package RTMB, which automates sequential reduction to efficiently marginalize a sequence of low-dimensional cliques in discrete-valued variables, uses automatic differentiation and the Laplace approximation to efficiently calculate the derivative of the log-marginal likelihood, and calculates the empirical Bayes estimate for posterior mean predictions for discrete variables.  We specifically demonstrate the speed and flexibility of mixed-type hierarchical models using demographic examples (dynamic occupancy, N-mixture, open dynamic N-mixture), where we compare RTMB with existing single-purpose benchmark software.  We then develop a novel mixed-type model for phylogenetic trait imputation, where we jointly impute a binary variable (viviparity) while estimating its switching rates, and also estimate its impact on a continuous variable (body size) during ancestral trait imputation for a published data set of female \textit{Liolaemus} lizards.  In both demographic and evolutionary examples, we visualize the automatically identified ordering for discrete-valued variables, and emphasize the simple workflow for bespoke model development.  We envision that easy and efficient access to mixed-type models will allow more expressive representation of evolutionary and ecological dynamics.
 
 
 \vspace*{\fill}
@@ -156,6 +156,19 @@ Keywords: Sequential reduction; hierarchical model; automatic differentiation; L
 \clearpage
 
 \section{Introduction}
+
+
+[Paragraph 1: Why bespoke models]
+
+Ecologists develop bespoke models for a wide range of ecological and evolutionary dynamics.  
+
+[2: Computational approaches and Gibbs sampling]
+
+[3: Automatic differentiation]
+
+[4: Sequential reduction]
+
+[5: Purpose of paper]
 
 \section{Methods}
 
@@ -168,6 +181,21 @@ Keywords: Sequential reduction; hierarchical model; automatic differentiation; L
 \bibliography{bib}
 
 % \end{spacing}
+
+
+\clearpage
+
+\section{Figures}
+
+\begin{figure}[htb]
+    \centering
+    \includegraphics[width=1\textwidth]{results/trait_imputation.png}
+    \caption{Phylogenetic tree for \textit{Liolaemus} lizards, including estimated body size and viviparity for both observed species (tips) and unobserved ancestors (interior nodes), showing the probability of viviparity (bounded from 0 to 1) on the right-hand-side (facing outward) for every taxon, as well as the log10 of body size on the left-hand side (facing outward).   
+    }
+    \label{fig:theory_check}
+\end{figure}
+
+\clearpage
 
 
 \end{document}
