@@ -20,6 +20,7 @@
 library(RTMB)
 library(unmarked)
 library(R2jags)
+source("R/utils.R")
 
 # JAGS model as a string - written to a temp file at runtime
 jags_model_nmix <- "
@@ -44,8 +45,9 @@ sim_data_nmix <- function(R, T, lambda, p) {
   list(y = y, R = R, T = T)
 }
 
-fit_all_nmix <- function(s, R, T, lambda_true, p_true,
+fit_all_nmix <- function(seed, R, T, lambda_true, p_true,
                          n.chains = 3, n.iter = 5000, n.burnin = 2500, n.thin = 1) {
+  set.seed(seed)
   dat <- sim_data_nmix(R, T, lambda_true, p_true)
   y <- dat$y
   K <- max(y) * 3 # buffer around K
@@ -178,16 +180,15 @@ fit_all_nmix <- function(s, R, T, lambda_true, p_true,
 
 run_nmixture <- function(nsim = 1, R = 100, T = 5,
                          lambda_true = 32, p_true = 0.25,
-                         seed = 333,
+                         seed = 333, mc.cores = 1,
                          n.chains = 3, n.iter = 5000,
                          n.burnin = 2500, n.thin = 1) {
-  set.seed(seed)
-  raw <- lapply(1:nsim, function(s) {
-    fit_all_nmix(s, R, T, lambda_true, p_true,
+  raw <- lapply_maybe(1:nsim, function(s) {
+    fit_all_nmix(seed + s, R, T, lambda_true, p_true,
       n.chains = n.chains, n.iter = n.iter,
       n.burnin = n.burnin, n.thin = n.thin
     )
-  })
+  }, mc.cores = mc.cores)
 
   estimates_all <- do.call(rbind, lapply(raw, function(x) x$estimates))
   times_all <- data.frame(
@@ -198,7 +199,7 @@ run_nmixture <- function(nsim = 1, R = 100, T = 5,
 
   # Keep only sims where all three frameworks succeeded
   ok <- complete.cases(estimates_all) & complete.cases(times_all)
-  estimates <- as.data.frame(estimates_all[ok, ])
+  estimates <- as.data.frame(estimates_all[ok, , drop = FALSE])
   times <- times_all[ok, ]
 
   conv_rate <- mean(sapply(raw, function(x) x$jags_converged), na.rm = TRUE)

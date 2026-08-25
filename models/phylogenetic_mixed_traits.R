@@ -3,8 +3,11 @@
 # Copied from: C:\Users\jtuth\Desktop\Work\Collab-2026\2026 -- sequential reduction\state_switching_20226-08-23.R
 #################
 
-data_dir = R'(C:\Users\jtuth\Documents\GitHub\RTMBdre\data)'
-results_dir = R'(C:\Users\jtuth\Documents\GitHub\RTMBdre\figures)'
+# Make sure to use github version of RTMB
+# pak::pak("kaskr/RTMB/RTMB")
+
+data_dir = "data"
+results_dir = "figures"
 
 library(RTMB)
 library(ape)
@@ -85,7 +88,7 @@ function( level,  # Count from zero
 }
 
 #
-onehot_type = c("abs", "index", "comparison")[3]
+onehot_type = c("abs", "index", "comparison")[1]
 get_jnll = function(p, what = "jnll"){
   "[<-" <- ADoverload("[<-")
   "c" <- ADoverload("c")

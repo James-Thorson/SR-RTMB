@@ -1,14 +1,18 @@
-.PHONY: all run parallel occupancy nmixture dailmadsen spde install clean
+.PHONY: all run parallel plots occupancy nmixture dailmadsen spde phylo install clean
 
 all: run
 
 # run all models sequentially
 test:
-	Rscript run_all.R
+	Rscript R/run_all.R
 
 # run all models in parallel (one sim per core)
 run:
-	Rscript run_all_parallel.R
+	Rscript R/run_all.R parallel
+
+# generate figures from results/*.rds (run after run/test)
+plots:
+	Rscript R/plots.R
 
 # run individual models
 occupancy:
@@ -23,10 +27,13 @@ dailmadsen:
 spde:
 	Rscript models/dail_madsen_spde.R
 
+phylo:
+	Rscript models/phylogenetic_mixed_traits.R
+
 # install required R packages
 install:
-	Rscript install.R
+	Rscript R/install.R
 
 # clean results
 clean:
-	rm -f results/*.rds results/*.md figures/*.png
+	rm -f results/*.rds results/*.csv figures/*.png

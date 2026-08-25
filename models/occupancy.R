@@ -20,6 +20,7 @@
 library(RTMB)
 library(unmarked)
 library(R2jags)
+source("R/utils.R")
 
 # JAGS model as a string - written to a temp file at runtime
 jags_model_occ <- "
@@ -47,9 +48,10 @@ sim_data_occ <- function(R, T, psi, p) {
   list(y = y, R = R, T = T)
 }
 
-fit_all_occ <- function(s, R, T, psi_true, p_true,
+fit_all_occ <- function(seed, R, T, psi_true, p_true,
                         n.chains = 3, n.iter = 5000, n.burnin = 2500, n.thin = 1) {
   gc() # get rid of residual JAGS misery
+  set.seed(seed)
   dat <- sim_data_occ(R, T, psi_true, p_true)
   y <- dat$y
 
@@ -183,16 +185,15 @@ fit_all_occ <- function(s, R, T, psi_true, p_true,
 
 run_occupancy <- function(nsim = 1, R = 200, T = 5,
                           psi_true = 0.2, p_true = 0.5,
-                          seed = 1123,
+                          seed = 1123, mc.cores = 1,
                           n.chains = 3, n.iter = 5000,
                           n.burnin = 2500, n.thin = 1) {
-  set.seed(seed)
-  raw <- lapply(1:nsim, function(s) {
-    fit_all_occ(s, R, T, psi_true, p_true,
+  raw <- lapply_maybe(1:nsim, function(s) {
+    fit_all_occ(seed + s, R, T, psi_true, p_true,
       n.chains = n.chains, n.iter = n.iter,
       n.burnin = n.burnin, n.thin = n.thin
     )
-  })
+  }, mc.cores = mc.cores)
 
   estimates_all <- do.call(rbind, lapply(raw, function(x) x$estimates))
   times_all <- data.frame(
@@ -203,7 +204,7 @@ run_occupancy <- function(nsim = 1, R = 200, T = 5,
 
   # Keep only sims where all three frameworks succeeded
   ok <- complete.cases(estimates_all) & complete.cases(times_all)
-  estimates <- as.data.frame(estimates_all[ok, ])
+  estimates <- as.data.frame(estimates_all[ok, , drop = FALSE])
   times <- times_all[ok, ]
 
   conv_rate <- mean(sapply(raw, function(x) x$jags_converged), na.rm = TRUE)

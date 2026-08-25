@@ -21,19 +21,21 @@
 #   G_it   = recruits at site i from time t to t+1
 #   y_it   = count at site i, time t
 #
-# Marginal likelihood integrates out N_it via forward algorithm:
-#   alpha_t(m) = P(y_i1,...,y_it, N_it=m)
-#             = P(y_it|N_it=m) * sum_n P(N_it=m|N_it-1=n) * alpha_t-1(n)
-#   L_i = sum_m alpha_T(m)
+# N_it and S_it are latent random effects, marginalized jointly by RTMB via
+# Sequential Reduction (SR) over {0, ..., K}:
+#   L_i = sum_{N_i1} ... sum_{N_iT} sum_{S_i1} ... sum_{S_i,T-1}
+#           Poisson(N_i1|lambda) * prod_t Binomial(S_it|N_it,omega) *
+#           Poisson(N_it+1-S_it|gamma) * Binomial(y_it|N_it,p)
 #
 # JAGS fits the same model via MCMC, sampling N_it and S_it explicitly.
-# Note: JAGS cannot use the forward algorithm - it samples the full latent
-# state space directly, which is substantially slower. This difference in
-# wall-time is part of the story this repository tells.
+# Note: JAGS cannot use SR - it samples the full latent state space
+# directly, which is substantially slower. This difference in wall-time is
+# part of the story this repository tells.
 
 library(RTMB)
 library(unmarked)
 library(R2jags)
+source("R/utils.R")
 
 # JAGS model as a string - written to a temp file at runtime
 jags_model_dm <- "
@@ -79,56 +81,55 @@ fit_rtmb <- function(y) {
   M <- nrow(y)
   T <- ncol(y)
   K <- max(y) * 2
-  ks <- 0:K
-  dat <- list(y = y, M = M, T = T, K = K, ks = ks)
+  dat <- list(y = y, M = M, T = T)
 
   f <- function(par) {
+    "[<-" <- ADoverload("[<-")
+    "c" <- ADoverload("c")
     getAll(par, dat)
     lambda <- exp(log_lambda)
     gamma <- exp(log_gamma)
     omega <- plogis(logit_omega)
     p <- plogis(logit_p)
 
-    # build transition matrix P(N_t+1=m | N_t=n)
-    # rows = N_t=n, cols = N_t+1=m
-    # P(N_t+1=m|N_t=n) = sum_s P(S=s|n,omega) * P(G=m-s|gamma)
-    trans <- matrix(0, K + 1, K + 1)
-    for (n in 0:K) {
-      surv_probs <- dbinom(0:n, n, omega)
-      recr_probs <- dpois(0:K, gamma)
-      for (m in 0:K) {
-        tp <- 0
-        for (s in 0:min(n, m)) {
-          tp <- tp + surv_probs[s + 1] * recr_probs[m - s + 1]
-        }
-        trans[n + 1, m + 1] <- tp
-      }
+    jnll <- -sum(dbinom(S, N[, 1:(T - 1)], omega, log = TRUE), na.rm = TRUE)
+    jnll <- jnll - sum(dpois(N[, 1], lambda, log = TRUE), na.rm = TRUE)
+    for (t in 1:(T - 1)) {
+      G <- N[, t + 1] - S[, t]
+      jnll <- jnll - sum(dpois(G, gamma, log = TRUE), na.rm = TRUE)
     }
-
-    nll <- 0
-    for (i in 1:M) {
-      alpha <- dpois(ks, lambda) * dbinom(y[i, 1], ks, p)
-      for (t in 2:T) {
-        alpha <- as.vector(t(trans) %*% alpha) * dbinom(y[i, t], ks, p)
-      }
-      nll <- nll - log(sum(alpha))
-    }
-    nll
+    jnll <- jnll - sum(dbinom(y, size = N, prob = p, log = TRUE), na.rm = TRUE)
+    jnll
   }
 
   par <- list(
     log_lambda  = log(mean(y[, 1]) + 0.1),
     log_gamma   = log(1.5),
     logit_omega = 0,
-    logit_p     = 0
+    logit_p     = 0,
+    S = matrix(K, nrow = M, ncol = T - 1),
+    N = matrix(K, nrow = M, ncol = T)
   )
 
-  obj <- tryCatch(MakeADFun(f, par), error = function(e) NULL)
+  obj <- tryCatch(
+    MakeADFun(f, par,
+      random = c("N", "S"),
+      integrate = list(
+        S = TMB::SR(0:K, discrete = TRUE),
+        N = TMB::SR(0:K, discrete = TRUE)
+      ),
+      silent = TRUE
+    ),
+    error = function(e) NULL
+  )
   if (is.null(obj)) {
     return(c(lambda = NA, gamma = NA, omega = NA, p = NA))
   }
 
-  opt <- tryCatch(nlminb(obj$par, obj$fn, obj$gr), error = function(e) NULL)
+  opt <- tryCatch(
+    nlminb(obj$par, obj$fn, obj$gr, control = list(iter.max = 1e5, eval.max = 1e5)),
+    error = function(e) NULL
+  )
   if (is.null(opt) || opt$convergence != 0) {
     return(c(lambda = NA, gamma = NA, omega = NA, p = NA))
   }
@@ -239,34 +240,36 @@ fit_jags_dm <- function(y, n.chains, n.iter, n.burnin, n.thin,
 run_dailmadsen <- function(nsim = 1, M = 100, T = 5,
                            lambda_true = 4, gamma_true = 1.5,
                            omega_true = 0.8, p_true = 0.5,
-                           seed = 333,
+                           seed = 333, mc.cores = 1,
                            n.chains = 3, n.iter = 5000,
                            n.burnin = 2500, n.thin = 1) {
-  set.seed(seed)
   datasets <- lapply(1:nsim, function(s) {
+    set.seed(seed + s)
     sim_dm(M, T, lambda_true, gamma_true, omega_true, p_true)
   })
 
-  # RTMB - all datasets timed together (matches original behaviour)
-  time_rtmb <- system.time({
-    res_rtmb <- lapply(datasets, function(y) {
-      tryCatch(fit_rtmb(y),
+  # Each dataset timed individually for every framework, so per-sim times
+  # are always available and mean times are true per-fit times rather than
+  # wall-clock-divided-by-nsim.
+  rtmb_raw <- lapply_maybe(datasets, function(y) {
+    t <- system.time({
+      out <- tryCatch(fit_rtmb(y),
         error = function(e) c(lambda = NA, gamma = NA, omega = NA, p = NA)
       )
     })
-  })
+    list(estimate = out, time = t["elapsed"])
+  }, mc.cores = mc.cores)
 
-  # unmarked - all datasets timed together
-  time_unm <- system.time({
-    res_unm <- lapply(datasets, function(y) {
-      tryCatch(fit_unm(y),
+  unm_raw <- lapply_maybe(datasets, function(y) {
+    t <- system.time({
+      out <- tryCatch(fit_unm(y),
         error = function(e) c(lambda = NA, gamma = NA, omega = NA, p = NA)
       )
     })
-  })
+    list(estimate = out, time = t["elapsed"])
+  }, mc.cores = mc.cores)
 
-  # JAGS - each dataset timed individually so per-sim times are available
-  jags_raw <- lapply(datasets, function(y) {
+  jags_raw <- lapply_maybe(datasets, function(y) {
     t <- system.time({
       out <- fit_jags_dm(y,
         n.chains = n.chains,
@@ -281,16 +284,20 @@ run_dailmadsen <- function(nsim = 1, M = 100, T = 5,
       jags_converged = out$jags_converged,
       time_jags = t["elapsed"]
     )
-  })
+  }, mc.cores = mc.cores)
 
-  res_rtmb <- as.data.frame(do.call(rbind, res_rtmb))
-  res_unm <- as.data.frame(do.call(rbind, res_unm))
+  res_rtmb <- as.data.frame(do.call(rbind, lapply(rtmb_raw, function(x) x$estimate)))
+  res_unm <- as.data.frame(do.call(rbind, lapply(unm_raw, function(x) x$estimate)))
   res_jags <- as.data.frame(
     do.call(rbind, lapply(jags_raw, function(x) x$estimates))
   )
   names(res_rtmb) <- c("lambda", "gamma", "omega", "p")
   names(res_unm) <- c("lambda", "gamma", "omega", "p")
   names(res_jags) <- c("lambda", "gamma", "omega", "p")
+
+  rtmb_times <- sapply(rtmb_raw, function(x) x$time)
+  unm_times <- sapply(unm_raw, function(x) x$time)
+  jags_times <- sapply(jags_raw, function(x) x$time_jags)
 
   # Drop the same simulation indices from all three frameworks so estimates
   # always correspond to the same dataset - critical for fair comparison
@@ -299,7 +306,6 @@ run_dailmadsen <- function(nsim = 1, M = 100, T = 5,
   res_unm <- res_unm[ok, ]
   res_jags <- res_jags[ok, ]
 
-  jags_times <- sapply(jags_raw, function(x) x$time_jags)
   conv_rate <- mean(sapply(jags_raw, function(x) x$jags_converged), na.rm = TRUE)
 
   list(
@@ -308,10 +314,12 @@ run_dailmadsen <- function(nsim = 1, M = 100, T = 5,
     estimates_unm = res_unm,
     estimates_jags = res_jags,
     times = data.frame(
-      rtmb = time_rtmb["elapsed"],
-      unm  = time_unm["elapsed"],
-      jags = sum(jags_times, na.rm = TRUE) # total wall time, matches rtmb/unm convention
+      rtmb = sum(rtmb_times, na.rm = TRUE),
+      unm  = sum(unm_times, na.rm = TRUE),
+      jags = sum(jags_times, na.rm = TRUE)
     ),
+    rtmb_times_per_sim = rtmb_times,
+    unm_times_per_sim = unm_times,
     jags_times_per_sim = jags_times,
     jags_conv_rate = conv_rate,
     truth = c(
