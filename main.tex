@@ -193,9 +193,17 @@ Add table for timings here
 Fig. 1 -- show sequential reduction conceptual figure ... perhaps the dependency graph, with clique sequence color-coded
 \end{figure}
 
+\clearpage
+
 \begin{figure}[htb]
-Fig. 2 -- show comparison of RTMB, JAGS, and unmarked as boxplots
+    \centering
+    \includegraphics[width=1\textwidth]{figures/estimate_recovery.png}
+    \caption{Distribution of parameter estimates for the occupancy model (left panel) including logit-linked occupancy probability $\psi$ and logit-linked detection probability $p$, for the N-mixture model (middle) including log-linked density $\lambda$ and logit-linked detection probability $p$, and the open N-mixture model (right) including log-linked initial density $\lambda$, log-linked recruitment $\gamma$, logit-linked survival probability $\omega$, and logit-linked detection probability $p$.
+    }
+    \label{fig:estimate_recovery}
 \end{figure}
+
+\clearpage
 
 \begin{figure}[htb]
     \centering
@@ -209,7 +217,7 @@ Fig. 2 -- show comparison of RTMB, JAGS, and unmarked as boxplots
 
 \begin{figure}[htb]
     \centering
-    \includegraphics[width=1\textwidth]{results/trait_imputation.png}
+    \includegraphics[width=1\textwidth]{figures/trait_imputation.png}
     \caption{Phylogenetic tree for \textit{Liolaemus} lizards, including estimated body size and viviparity for both observed species (tips) and unobserved ancestors (interior nodes), showing the probability of viviparity (bounded from 0 to 1) on the right-hand-side (facing outward) for every taxon, as well as the log10 of body size on the left-hand side (facing outward).   
     }
     \label{fig:phylogeny}
