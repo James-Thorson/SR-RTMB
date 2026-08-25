@@ -17,7 +17,7 @@ dir.create("results", showWarnings = FALSE)
 # -----------------------------------------------------------
 # Simulation settings - edit here to control all models
 # -----------------------------------------------------------
-nsim <- 25
+nsim <- 100
 # Occupancy
 occ_R <- 200
 occ_T <- 5

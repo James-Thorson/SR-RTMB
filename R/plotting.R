@@ -4,8 +4,8 @@
 library(ggplot2)
 
 col_rtmb <- "#a855f7"
-col_unm <- "#eb6834"
-col_jags <- "#2563EB"
+col_unm <- "0F1D32"
+col_jags <- "#111820"
 
 # -----------------------------------------------------------
 # Timing summary table (mean seconds per fit, by model x framework)
@@ -77,7 +77,6 @@ plot_timing_violin <- function(timings_long, path = "plots/timing_violin.png") {
     ) +
     facet_wrap(~model, scales = "free_y") +
     labs(
-      title = "Per-fit runtime by framework",
       x = NULL, y = "Time per fit (s, log scale)"
     ) +
     theme_minimal(base_size = 12) +
