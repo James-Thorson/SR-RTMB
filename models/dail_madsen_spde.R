@@ -24,7 +24,7 @@ dir.create("plots", showWarnings = FALSE)
 
 set.seed(1234)
 
-M <- 10
+M <- 200
 T <- 3
 K <- 10
 
@@ -33,8 +33,10 @@ mu_lambda_true <- log(3.5)
 omega_true <- 0.7
 gamma_true <- 1.5
 p_true <- 0.4
-ln_tauO_true <- log(0.2)
-ln_kappa_true <- log(sqrt(8) / 0.3)
+omega_range <- 0.3
+omega_SD <- 1
+ln_kappa_true <- log(sqrt(8) / omega_range)
+ln_tauO_true <- log(1 / (omega_SD * exp(ln_kappa_true) * sqrt(4*pi)))
 
 # -------------------------------------------------------------
 # 1. simulation
@@ -162,6 +164,7 @@ print(data.frame(
 
 omega_est_sites <- as.numeric(A_is %*% obj$env$parList()$omega_s)
 lim <- max(abs(c(omega_i, omega_est_sites)))
+mesh_sfc <- fm_as_sfc(mesh)
 
 field_dat <- rbind(
   data.frame(x = coords[, "x"], y = coords[, "y"], omega = omega_i, panel = "true"),
@@ -169,13 +172,34 @@ field_dat <- rbind(
 )
 
 plot_field <- function(df, title) {
-  ggplot(df, aes(x = x, y = y, color = omega)) +
-    geom_point(size = 2.2) +
+#  ggplot(df, aes(x = x, y = y, color = omega)) +
+#    geom_point(size = 2.2) +
+#    scale_color_gradient2(
+#      low = "#2166ac", mid = "white", high = "#b2182b",
+#      midpoint = 0, limits = c(-lim, lim), name = expression(omega[i])
+#    ) +
+#    coord_equal() +
+#    labs(title = title, x = "x", y = "y") +
+#    theme_minimal(base_size = 11) +
+#    theme(panel.grid.minor = element_blank())
+  ggplot(df, aes(x = x, y = y)) +
+    # mesh triangles drawn first, underneath the points
+    geom_sf(
+      data = mesh_sfc,
+      inherit.aes = FALSE,
+      fill = NA,
+      color = "grey70",
+      linewidth = 0.15
+    ) +
+    geom_point(aes(color = omega), size = 2.2) +
     scale_color_gradient2(
       low = "#2166ac", mid = "white", high = "#b2182b",
       midpoint = 0, limits = c(-lim, lim), name = expression(omega[i])
     ) +
-    coord_equal() +
+    coord_sf(
+      #xlim = range(df$x), ylim = range(df$y),
+      default_crs = sf::st_crs(mesh_sfc), expand = TRUE
+    ) +
     labs(title = title, x = "x", y = "y") +
     theme_minimal(base_size = 11) +
     theme(panel.grid.minor = element_blank())
