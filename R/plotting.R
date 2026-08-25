@@ -3,9 +3,9 @@
 
 library(ggplot2)
 
-col_rtmb <- "#1b9e77"
-col_unm <- "#d95f02"
-col_jags <- "#7570b3"
+col_rtmb <- "#a6cee3"
+col_unm <- "#1f78b4"
+col_jags <- "#b2df8a"
 
 # -----------------------------------------------------------
 # Timing summary table (mean seconds per fit, by model x framework)
@@ -82,7 +82,7 @@ plot_timing_violin <- function(timings_long, path = "plots/timing_violin.png") {
     theme_minimal(base_size = 12) +
     theme(panel.grid.minor = element_blank())
 
-  ggsave(path, fig, width = 10, height = 4.5, dpi = 150)
+  ggsave(path, fig, width = 11, height = 5, dpi = 150)
   cat("Timing violin plot saved to", path, "\n")
 }
 
@@ -171,6 +171,6 @@ plot_estimate_recovery <- function(relbias_long, path = "plots/estimate_recovery
     theme_minimal(base_size = 12) +
     theme(panel.grid.minor = element_blank(), legend.position = "bottom")
 
-  ggsave(path, fig, width = 12, height = 5.5, dpi = 150)
+  ggsave(path, fig, width = 13, height = 6, dpi = 150)
   cat("Estimate recovery plot saved to", path, "\n")
 }
