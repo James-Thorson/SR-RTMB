@@ -146,7 +146,7 @@ Automated sequential reduction for continuous and discrete latent variables in e
 % for ices: 350 word limit for MEE (currently 350)
 \section{Abstract}
 
-Statistical models representing ecological and evolutionary dynamics often include latent variables, which can be either continuous- (e.g., average body size) or discrete-valued (numerical abundance).  Ecologists often implement mixed-type hierarchical models using Markov chain Monte Carlo (MCMC), but this can be prohibitively slow for large models.  Here, we introduce an alternative approach in the R-package RTMB, which automates sequential reduction to efficiently marginalize a sequence of low-dimensional cliques in discrete-valued variables, uses automatic differentiation and the Laplace approximation to efficiently calculate the derivative of the log-marginal likelihood, and calculates the empirical Bayes estimate for posterior mean predictions for discrete variables.  We specifically demonstrate the speed and flexibility of mixed-type hierarchical models using demographic examples (dynamic occupancy, N-mixture, open dynamic N-mixture), where we compare RTMB with existing single-purpose benchmark software.  We then develop a novel mixed-type model for phylogenetic trait imputation, where we jointly impute a binary variable (viviparity) while estimating its switching rates, and also estimate its impact on a continuous variable (body size) during ancestral trait imputation for a published data set of female \textit{Liolaemus} lizards.  In both demographic and evolutionary examples, we visualize the automatically identified ordering for discrete-valued variables, and emphasize the simple workflow for bespoke model development.  We envision that easy and efficient access to mixed-type models will allow more expressive representation of evolutionary and ecological dynamics.
+Statistical models representing ecological and evolutionary dynamics often include latent variables, which can be either continuous- (e.g., average body size) or discrete-valued (numerical abundance).  Mixed-type hierarchical models are fitted using Markov chain Monte Carlo (MCMC), but this can be prohibitively slow for large models.  Here, we introduce an alternative approach in the R-package RTMB, which automates sequential reduction to efficiently marginalize a sequence of low-dimensional cliques in discrete-valued variables, uses automatic differentiation and the Laplace approximation to efficiently calculate the derivative of the log-marginal likelihood, and then calculates posterior predictions as either the mean or mode for both variable types.  We specifically demonstrate the speed and flexibility of mixed-type hierarchical models using demographic examples (dynamic occupancy, N-mixture, open dynamic N-mixture), where we compare RTMB with existing single-purpose benchmark software.  We then develop a novel mixed-type model for phylogenetic trait imputation, where we jointly impute a binary variable (viviparity) while estimating its switching rates, and also estimate its impact on a continuous variable (body size) during ancestral trait imputation for a published data set of female \textit{Liolaemus} lizards.  In both demographic and evolutionary examples, we visualize the automatically identified ordering for discrete-valued variables, and emphasize the simple workflow for bespoke model development.  We envision that easy and efficient access to mixed-type models will allow more expressive representation of evolutionary and ecological dynamics.
 
 
 \vspace*{\fill}
@@ -180,7 +180,9 @@ Ecologists develop bespoke models for a wide range of ecological and evolutionar
 
 \bibliography{bib}
 
-% \end{spacing}
+\section{Tables}
+
+Add table for timings here
 
 
 \clearpage
@@ -188,14 +190,31 @@ Ecologists develop bespoke models for a wide range of ecological and evolutionar
 \section{Figures}
 
 \begin{figure}[htb]
+Fig. 1 -- show sequential reduction conceptual figure ... perhaps the dependency graph, with clique sequence color-coded
+\end{figure}
+
+\begin{figure}[htb]
+Fig. 2 -- show comparison of RTMB, JAGS, and unmarked as boxplots
+\end{figure}
+
+\begin{figure}[htb]
     \centering
-    \includegraphics[width=1\textwidth]{results/trait_imputation.png}
-    \caption{Phylogenetic tree for \textit{Liolaemus} lizards, including estimated body size and viviparity for both observed species (tips) and unobserved ancestors (interior nodes), showing the probability of viviparity (bounded from 0 to 1) on the right-hand-side (facing outward) for every taxon, as well as the log10 of body size on the left-hand side (facing outward).   
+    \includegraphics[width=1\textwidth]{figures/spde_field.png}
+    \caption{Simulated (left) and estimated (right) recruitment rate for a multi-site Dail-Madsen model.   
     }
-    \label{fig:theory_check}
+    \label{fig:spde}
 \end{figure}
 
 \clearpage
 
+\begin{figure}[htb]
+    \centering
+    \includegraphics[width=1\textwidth]{results/trait_imputation.png}
+    \caption{Phylogenetic tree for \textit{Liolaemus} lizards, including estimated body size and viviparity for both observed species (tips) and unobserved ancestors (interior nodes), showing the probability of viviparity (bounded from 0 to 1) on the right-hand-side (facing outward) for every taxon, as well as the log10 of body size on the left-hand side (facing outward).   
+    }
+    \label{fig:phylogeny}
+\end{figure}
+
+\clearpage
 
 \end{document}
