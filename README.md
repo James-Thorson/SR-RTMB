@@ -1,38 +1,39 @@
 # Discrete Latent Variable Models in RTMB
-Occupancy, N-mixture, and open population models such as the Dail-Madsen are among the most widely used statistical tools in wildlife ecology, yet all share a common challenge: inference requires integrating over discrete latent states that are never directly observed. Automatic differentiation frameworks like TMB and its derivatives have historically struggled with this class of models. This has largely excluded such models from the ADMB/TMB/RTMB ecosystems. Here we implement all three models in RTMB using sum-reduction and a forward algorithm to marginalize over discrete latent states, and compare parameter recovery and computational performance against `unmarked`, a widely used package purpose-built for this class of models, and `JAGS`, a general-purpose Bayesian sampler.
+
+Occupancy, N-mixture, and open population models such as the Dail-Madsen are among the most widely used statistical tools in wildlife ecology, yet all share a common challenge: inference requires integrating over discrete latent states that are never directly observed. Automatic differentiation frameworks like TMB and its derivatives have historically struggled with this class of models. This has largely excluded such models from the ADMB/TMB/RTMB ecosystems. Here we implement all three models in RTMB using sequential reduction to marginalize over discrete latent states, and compare parameter recovery and computational performance against `unmarked`, a widely used package purpose-built for this class of models, and `JAGS`, a general-purpose Bayesian sampler.
 
 ## Quick Start
 
-```bash
+``` bash
 git clone https://github.com/James-Thorson/RTMBdre.git
 cd RTMBdre
 make install        # install required R packages (system JAGS must be installed first)
 time make           # run
 ```
 
-This runs the simulation and all results and plots are saved to `results/` and `figures/`.
-
-[View Sequential Reduction Demo](https://james-thorson.github.io/RTMBdre/sequential_reduction_demo.html)
+This runs the simulation and saves results to `results/`. Run `make plots` afterward to generate figures into `plots/`.
 
 ## Models
 
+All discrete latent states below are marginalized via Sequential Reduction (SR) in RTMB; JAGS samples them explicitly via MCMC for comparison.
+
 ### Occupancy (MacKenzie et al. 2002)
-Discrete latent occupancy state `z_i` marginalized via **Sequential Reduction (SR)** in RTMB; sampled explicitly via MCMC in JAGS:
-```
+
+```         
 z_i ~ Bernoulli(psi)
 y_ij | z_i ~ Bernoulli(z_i * p)
 ```
 
 ### N-mixture (Royle 2004)
-Discrete latent abundance `N_i` marginalized via **Sequential Reduction (SR)** in RTMB; sampled explicitly via MCMC in JAGS:
-```
+
+```         
 N_i ~ Poisson(lambda)
 y_ij | N_i ~ Binomial(N_i, p)
 ```
 
 ### Dail-Madsen (Dail & Madsen 2011)
-Temporally dependent latent abundance `N_it` marginalized via **Forward Algorithm** in RTMB; full latent state space `N_it`, `S_it` sampled explicitly via MCMC in JAGS:
-```
+
+```         
 N_i1 ~ Poisson(lambda)
 S_it | N_it ~ Binomial(N_it, omega)
 G_it ~ Poisson(gamma)
@@ -41,62 +42,43 @@ y_it | N_it ~ Binomial(N_it, p)
 ```
 
 ## Results
-Histograms represent distributions of estimates from 100 simulated datasets. For RTMB and unmarked these are maximum likelihood estimates; for JAGS these are posterior means. True values used for simulation are indicated by the red vertical lines.
 
-### Occupancy
-![Occupancy](figures/occupancy.png)
+### Estimate recovery
 
-### N-mixture
-![N-mixture](figures/nmixture.png)
+Relative bias, `(estimate - truth) / truth`, across simulated datasets, one panel per model and one violin/boxplot per parameter, colored by framework. For RTMB and unmarked these are maximum likelihood estimates; for JAGS these are posterior means. The dashed line at 0 marks unbiased recovery.
 
-### Dail-Madsen
-![Dail-Madsen](figures/dail_madsen.png)
+![Estimate recovery](plots/estimate_recovery.png)
 
-## Timing
+### Runtime
 
-Mean time per fit (seconds), averaged over 100 simulations. JAGS timings include the full chain: adaptation, burnin, and sampling. All three frameworks fit identical simulated datasets.
+![Timing](plots/timing_violin.png)
 
-| Model | RTMB (s) | unmarked (s) | JAGS (s) | RTMB vs unmarked | RTMB vs JAGS |
-|---|---|---|---|---|---|
-| Occupancy | 0.111 | 0.874 | 52.987 | 7.9x | 477.4x |
-| N-mixture | 0.185 | 0.406 | 149.462 | 2.2x | 807.9x |
-| Dail-Madsen | 0.346 | 16.894 | 653.591 | 48.8x | 1889x |
+JAGS timings include the full chain: adaptation, burnin, and sampling. All three frameworks fit identical simulated datasets. `unmarked`'s occupancy fit uses a closed-form marginal likelihood, so it's expected to beat RTMB there; JAGS is expected to be far slower on Dail-Madsen since it samples the full latent state space (`N_it`, `S_it`) via Gibbs steps at every site and time step.
 
-The occupancy model in `unmarked` uses a closed-form marginal
-likelihood, requiring fewer function evaluations than RTMB's sequential
-reduction over {0,1}. `unmarked` is therefore expected to be faster for
-this specific case. The JAGS Dail-Madsen is expected to be substantially slower than RTMB. JAGS must sample the full latent state space — `N_it` and `S_it` at every site and time step — via Gibbs steps. RTMB is parameterizted to avoid this entirely by marginalizing out the discrete states analytically via the forward algorithm. 
+### Convergence
+
+Convergence is assessed via the Gelman-Rubin R-hat statistic (Gelman & Rubin 1992) across 4 chains; a fit is flagged converged when R-hat \< 1.1 for all monitored parameters. Rates are printed to console by `make plots`. Dail-Madsen's lower convergence rate reflects the difficulty of sampling its high-dimensional latent state space directly.
 
 ## JAGS MCMC Settings
 
-JAGS settings are configurable at the top of `run_all.R` and `run_all_parallel.R`. Occupancy and N-mixture use shorter chains; Dail-Madsen requires longer runs due to the complexity of its latent state space.
-
-## MCMC Convergence Diagnostics
-
-Convergence is assessed using the Gelman-Rubin potential scale reduction factor (R-hat; Gelman & Rubin 1992). R-hat compares within-chain to between-chain variance across the 4 independent chains — values near 1.0 indicate convergence, and a fit is flagged as converged when R-hat < 1.1 for all monitored parameters. 
-
-Convergence rates across simulations (proportion of fits with R-hat < 1.1 for all parameters):
-
-| Model | Convergence Rate |
-|---|---|
-| Occupancy | 1 |
-| N-mixture | 0.98 |
-| Dail-Madsen | 0.08 |
-
-The lower convergence rate for Dail-Madsen reflects the difficulty of sampling its high-dimensional latent state space — `N[i,t]`, `S[i,t]`, and `G[i,t]` must all be sampled explicitly via Gibbs steps at every site and time step. RTMB sidesteps this entirely by marginalizing out the discrete states via the forward algorithm. Convergence rates and per-simulation R-hat values are printed to the console and saved in `results/timing_summary.md` on each run.
+JAGS settings are configurable at the top of `run_all.R`. Occupancy and N-mixture use shorter chains; Dail-Madsen requires longer runs due to the complexity of its latent state space.
 
 ## Repository Structure
 
-```
+```         
 models/
-  occupancy.R           # occupancy model - SR over Bernoulli latent; JAGS comparison embedded
-  nmixture.R            # N-mixture model - SR over Poisson latent; JAGS comparison embedded
-  dail_madsen.R         # Dail-Madsen model - forward algorithm; JAGS comparison embedded
-  dail_madsen_spde.R    # spatial Dail-Madsen with GMRF on lambda via SPDE
-figures/               # plots (created on run)
-results/               # .rds results and timing summary (created on run)
-run_all.R              # master script (sequential)
-install.R              # installs required R packages
+  occupancy.R           # occupancy model; JAGS comparison embedded
+  nmixture.R            # N-mixture model; JAGS comparison embedded
+  dail_madsen.R         # Dail-Madsen model; JAGS comparison embedded
+  dail_madsen_spde.R    # spatial Dail-Madsen with GMRF on lambda via SPDE (in progress)
+R/
+  utils.R                # shared helpers (e.g. lapply_maybe) sourced by model scripts
+  plotting.R              # shared timing/plotting helpers sourced by plots.R
+plots/                  # figures (created by plots.R)
+results/                # .rds results and per-sim timing CSV (created by run_all.R)
+run_all.R               # runs all models, saves results/*.rds
+plots.R                 # loads results/*.rds, saves figures to plots/
+install.R               # installs required R packages
 Makefile
 ```
 
@@ -104,50 +86,24 @@ Each model file contains RTMB, unmarked, and JAGS fits in a single internal work
 
 ## Usage
 
-```bash
-make                                      # run all models in parallel via run_all_parallel.R
-make test                                 # run models sequentially via run_all.R
-make occupancy                            # run occupancy only one time
-make nmixture                             # run N-mixture only one time
-make dailmadsen                           # run Dail-Madsen only one time
-make spde                                 # run spatial Dail-Madsen (SPDE) only one time
-make install                              # install required R packages
-make clean                                # remove results and figures
+``` bash
+make install    # install required R packages (once)
+make            # run all three models in parallel, save results/*.rds
+make plots      # build figures from results/*.rds into plots/
 ```
 
-## A Nontrivial Extension: Spatial GMRF on Initial Abundance
+Other targets:
 
-While it is reassuring that RTMB recovers estimates comparable to `unmarked` for the three baseline models, a more compelling motivation for working within this framework is the flexibility it affords for model extensions that fall outside what `unmarked` can accommodate. Here we demonstrate one such extension by constructing a Dail-Madsen model with a spatial random effect on initial abundance, implemented via the Stochastic Partial Differential Equation (SPDE) approach. Specifically, we leverage RTMB's ability to work with sparse precision matrices to place a Gaussian Markov Random Field (GMRF) on log(λᵢ), allowing initial abundance to vary continuously across space.
-
-`models/dail_madsen_spde.R` extends the Dail-Madsen model with a spatial random effect on initial abundance via the SPDE approach. Site-level log-abundance is modeled as:
-
-```
-log(lambda_i) = mu_lambda + omega_i
-omega_s ~ GMRF(0, Q / tau^2)
-Q = kappa^4 * M0 + 2 * kappa^2 * M1 + M2
-```
-
-where `Q` is the SPDE precision matrix constructed from `fmesher` FEM matrices `M0`, `M1`, `M2`. The continuous random effect `omega_s` is integrated out by RTMB's Laplace approximation; discrete latent `N_it` by the forward algorithm as before.
-
-```bash
-time make spde # spde dail-madsen runs in ~5-10 seconds
-```
-
-### Mesh and site locations
-
-Sites are placed at random locations in the unit square. A triangulated mesh is built over the sites and the spatial field is simulated on mesh vertices then projected to site locations via the projection matrix `A_is`.
-
-![SPDE mesh](figures/spde_mesh.png)
-
-### Estimated vs true spatial field
-
-The colour scale is shared across both panels and centred at zero.
-
-![SPDE field](figures/spde_field.png)
+| Target | Effect |
+|------------------------------------|------------------------------------|
+| `make test` | run all models sequentially instead of in parallel |
+| `make occupancy`, `make nmixture`, `make dailmadsen` | run a single model |
+| `make spde` | run the spatial Dail-Madsen extension (in progress) |
+| `make clean` | remove everything in `results/` and `plots/` |
 
 ## Dependencies
 
-```bash
+``` bash
 make install
 ```
 
@@ -155,12 +111,13 @@ This runs `install.R` which installs all required R packages (`RTMB`, `unmarked`
 
 - **Debian/Ubuntu**: `sudo apt-get install jags`
 - **macOS**: `brew install jags`
-- **Windows/other**: https://mcmc-jags.sourceforge.io
+- **Windows/other**: <https://mcmc-jags.sourceforge.io>
 
 ## Planned Extensions
 
-- NIMBLE implementations
-- Unified timing comparison across RTMB, unmarked, JAGS, and NIMBLE
+- **In progress**: spatial GMRF on initial abundance via SPDE (`models/dail_madsen_spde.R`)
+  - Possibly running into computational challenges with this model???
+- Unified timing comparison across RTMB, unmarked, JAGS.
 
 ## References
 

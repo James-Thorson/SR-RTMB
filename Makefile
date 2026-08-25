@@ -1,4 +1,4 @@
-.PHONY: all run parallel occupancy nmixture dailmadsen spde install clean
+.PHONY: all run parallel plots occupancy nmixture dailmadsen spde install clean
 
 all: run
 
@@ -8,7 +8,11 @@ test:
 
 # run all models in parallel (one sim per core)
 run:
-	Rscript run_all_parallel.R
+	Rscript run_all.R parallel
+
+# generate figures from results/*.rds (run after run/test)
+plots:
+	Rscript plots.R
 
 # run individual models
 occupancy:
@@ -29,4 +33,4 @@ install:
 
 # clean results
 clean:
-	rm -f results/*.rds results/*.md figures/*.png
+	rm -f results/*.rds results/*.csv plots/*.png

@@ -9,11 +9,13 @@
 #   Windows/other: https://mcmc-jags.sourceforge.io
 
 pkgs <- c(
-  "RTMB", # automatic differentiation + SR/forward algorithm
+  "RTMB", # automatic differentiation + sequential reduction (SR)
   "unmarked", # MLE benchmark for occupancy, N-mixture, Dail-Madsen
   "R2jags", # JAGS interface (requires system JAGS)
   "fmesher", # SPDE mesh construction for spatial Dail-Madsen
-  "parallel"
+  "parallel",
+  "ggplot2", # timing violin plot and SPDE field plot
+  "patchwork" # combining ggplot2 panels
 )
 
 to_install <- pkgs[!pkgs %in% rownames(installed.packages())]
