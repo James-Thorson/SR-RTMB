@@ -15,6 +15,9 @@
 # (SR) over {0, ..., K} - the same redux state-space formulation used in
 # models/dail_madsen.R.
 
+# Make sure to use github version of RTMB
+# pak::pak("kaskr/RTMB/RTMB")
+
 library(RTMB)
 library(fmesher)
 library(ggplot2)
