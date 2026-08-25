@@ -63,7 +63,7 @@ write_timing_csv <- function(res_occ, res_nmix, res_dm, path = "results/timings.
   timings_long
 }
 
-plot_timing_violin <- function(timings_long, path = "plots/timing_violin.png") {
+plot_timing_violin <- function(timings_long, path = "figures/timing_violin.png") {
   timings_long$framework <- factor(timings_long$framework, levels = c("RTMB", "unmarked", "JAGS"))
   timings_long$model <- factor(timings_long$model, levels = c("Occupancy", "N-mixture", "Dail-Madsen"))
 
@@ -138,7 +138,7 @@ build_relbias_long <- function(res_occ, res_nmix, res_dm) {
   rbind(occ, nmix, dm)
 }
 
-plot_estimate_recovery <- function(relbias_long, path = "plots/estimate_recovery.png") {
+plot_estimate_recovery <- function(relbias_long, path = "figures/estimate_recovery.png") {
   relbias_long$framework <- factor(relbias_long$framework, levels = c("RTMB", "unmarked", "JAGS"))
   relbias_long$model <- factor(relbias_long$model, levels = c("Occupancy", "N-mixture", "Dail-Madsen"))
   # "p" is shared by all three models but should sort last within each

@@ -11,7 +11,7 @@ make install        # install required R packages (system JAGS must be installed
 time make           # run
 ```
 
-This runs the simulation and saves results to `results/`. Run `make plots` afterward to generate figures into `plots/`.
+This runs the simulation and saves results to `results/`. Run `make plots` afterward to generate figures into `figures/`.
 
 ## Models
 
@@ -47,11 +47,11 @@ y_it | N_it ~ Binomial(N_it, p)
 
 Relative bias, `(estimate - truth) / truth`, across simulated datasets, one panel per model and one violin/boxplot per parameter, colored by framework. For RTMB and unmarked these are maximum likelihood estimates; for JAGS these are posterior means. The dashed line at 0 marks unbiased recovery.
 
-![Estimate recovery](plots/estimate_recovery.png)
+![Estimate recovery](figures/estimate_recovery.png)
 
 ### Runtime
 
-![Timing](plots/timing_violin.png)
+![Timing](figures/timing_violin.png)
 
 ### Convergence
 
@@ -65,18 +65,19 @@ JAGS settings are configurable at the top of `run_all.R`. Occupancy and N-mixtur
 
 ```         
 models/
-  occupancy.R           # occupancy model; JAGS comparison embedded
-  nmixture.R            # N-mixture model; JAGS comparison embedded
-  dail_madsen.R         # Dail-Madsen model; JAGS comparison embedded
-  dail_madsen_spde.R    # spatial Dail-Madsen with GMRF on lambda via SPDE (in progress)
+  occupancy.R                    # occupancy model; JAGS comparison embedded
+  nmixture.R                     # N-mixture model; JAGS comparison embedded
+  dail_madsen.R                  # Dail-Madsen model; JAGS comparison embedded
+  dail_madsen_spde.R             # spatial Dail-Madsen with GMRF on lambda via SPDE (in progress)
+  phylogenetic_mixed_traits.R    # phylogenetic trait imputation (viviparity/body size)
 R/
-  utils.R                # shared helpers (e.g. lapply_maybe) sourced by model scripts
-  plotting.R              # shared timing/plotting helpers sourced by plots.R
-plots/                  # figures (created by plots.R)
+  utils.R                 # shared helpers (e.g. lapply_maybe) sourced by model scripts
+  plotting.R               # shared timing/plotting helpers sourced by plots.R
+  run_all.R                # runs all models, saves results/*.rds
+  plots.R                  # loads results/*.rds, saves figures to figures/
+  install.R                # installs required R packages
+figures/                # figures (created by plots.R and phylogenetic_mixed_traits.R)
 results/                # .rds results and per-sim timing CSV (created by run_all.R)
-run_all.R               # runs all models, saves results/*.rds
-plots.R                 # loads results/*.rds, saves figures to plots/
-install.R               # installs required R packages
 Makefile
 ```
 
@@ -87,7 +88,7 @@ Each model file contains RTMB, unmarked, and JAGS fits in a single internal work
 ``` bash
 make install    # install required R packages (once)
 make            # run all three models in parallel, save results/*.rds
-make plots      # build figures from results/*.rds into plots/
+make plots      # build figures from results/*.rds into figures/
 ```
 
 Other targets:
@@ -97,7 +98,8 @@ Other targets:
 | `make test` | run all models sequentially instead of in parallel |
 | `make occupancy`, `make nmixture`, `make dailmadsen` | run a single model |
 | `make spde` | run the spatial Dail-Madsen extension (in progress) |
-| `make clean` | remove everything in `results/` and `plots/` |
+| `make phylo` | run the phylogenetic trait imputation model |
+| `make clean` | remove everything in `results/` and `figures/` |
 
 ## Dependencies
 
@@ -105,7 +107,7 @@ Other targets:
 make install
 ```
 
-This runs `install.R` which installs all required R packages (`RTMB`, `unmarked`, `R2jags`, `fmesher`). JAGS also requires a system-level installation before `R2jags` will work:
+This runs `R/install.R` which installs all required R packages (`RTMB`, `unmarked`, `R2jags`, `fmesher`, `ggplot2`, `patchwork`, `ape`, `ggforce`, `ggnewscale`, `viridis`, and the Bioconductor package `ggtree`). JAGS also requires a system-level installation before `R2jags` will work:
 
 - **Debian/Ubuntu**: `sudo apt-get install jags`
 - **macOS**: `brew install jags`

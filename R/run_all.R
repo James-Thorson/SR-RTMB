@@ -1,10 +1,10 @@
 # run_all.R
 # Runs all three models and saves results/*.rds (estimates + per-sim timings).
 # Usage:
-#   Rscript run_all.R            # sequential (mc.cores = 1)
-#   Rscript run_all.R parallel   # parallel (mc.cores = detectCores() - 1)
+#   Rscript R/run_all.R            # sequential (mc.cores = 1)
+#   Rscript R/run_all.R parallel   # parallel (mc.cores = detectCores() - 1)
 #   or: make test / make run
-# Follow with `make plots` (Rscript plots.R) to generate figures.
+# Follow with `make plots` (Rscript R/plots.R) to generate figures.
 source("models/occupancy.R")
 source("models/nmixture.R")
 source("models/dail_madsen.R")

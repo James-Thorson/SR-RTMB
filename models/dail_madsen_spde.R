@@ -67,7 +67,7 @@ y <- matrix(rbinom(M * T, N, p_true), M, T)
 # 2. plot: mesh and site locations
 # -------------------------------------------------------------
 
-png("plots/spde_mesh.png", width = 600, height = 600, res = 150)
+png("figures/spde_mesh.png", width = 600, height = 600, res = 150)
 par(mar = c(4, 4, 3, 1))
 plot(mesh,
   main = "mesh and site locations",
@@ -185,4 +185,4 @@ fig_field <- plot_field(field_dat[field_dat$panel == "true", ], expression(omega
   plot_field(field_dat[field_dat$panel == "estimated", ], expression(omega[i] ~ "estimated")) +
   plot_layout(guides = "collect")
 
-ggsave("plots/spde_field.png", fig_field, width = 9, height = 4.5, dpi = 150)
+ggsave("figures/spde_field.png", fig_field, width = 9, height = 4.5, dpi = 150)

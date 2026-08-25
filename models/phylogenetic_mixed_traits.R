@@ -3,8 +3,8 @@
 # Copied from: C:\Users\jtuth\Desktop\Work\Collab-2026\2026 -- sequential reduction\state_switching_20226-08-23.R
 #################
 
-data_dir = R'(C:\Users\jtuth\Documents\GitHub\RTMBdre\data)'
-results_dir = R'(C:\Users\jtuth\Documents\GitHub\RTMBdre\figures)'
+data_dir = "data"
+results_dir = "figures"
 
 library(RTMB)
 library(ape)

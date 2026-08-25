@@ -1,6 +1,6 @@
 # install.R
 # Installs all R packages required to run the RTMBdre repository.
-# Usage: Rscript install.R
+# Usage: Rscript R/install.R
 #   or:  make install
 #
 # Note: JAGS also requires a system-level installation.
@@ -15,15 +15,27 @@ pkgs <- c(
   "fmesher", # SPDE mesh construction for spatial Dail-Madsen
   "parallel",
   "ggplot2", # timing violin plot and SPDE field plot
-  "patchwork" # combining ggplot2 panels
+  "patchwork", # combining ggplot2 panels
+  "ape", # phylogenetic tree I/O for trait imputation
+  "ggforce", # trait imputation figure
+  "ggnewscale", # trait imputation figure
+  "viridis" # trait imputation figure
 )
 
 to_install <- pkgs[!pkgs %in% rownames(installed.packages())]
 
 if (length(to_install) == 0) {
-  cat("All required packages are already installed.\n")
+  cat("All required CRAN packages are already installed.\n")
 } else {
   cat("Installing:", paste(to_install, collapse = ", "), "\n")
   install.packages(to_install, repos = "https://cloud.r-project.org")
   cat("Done.\n")
+}
+
+# ggtree is Bioconductor-only, used by the trait imputation figure
+if (!requireNamespace("ggtree", quietly = TRUE)) {
+  if (!requireNamespace("BiocManager", quietly = TRUE)) {
+    install.packages("BiocManager", repos = "https://cloud.r-project.org")
+  }
+  BiocManager::install("ggtree", update = FALSE, ask = FALSE)
 }

@@ -204,7 +204,7 @@ run_occupancy <- function(nsim = 1, R = 200, T = 5,
 
   # Keep only sims where all three frameworks succeeded
   ok <- complete.cases(estimates_all) & complete.cases(times_all)
-  estimates <- as.data.frame(estimates_all[ok, ])
+  estimates <- as.data.frame(estimates_all[ok, , drop = FALSE])
   times <- times_all[ok, ]
 
   conv_rate <- mean(sapply(raw, function(x) x$jags_converged), na.rm = TRUE)
