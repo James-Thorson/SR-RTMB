@@ -3,9 +3,9 @@
 
 library(ggplot2)
 
-col_rtmb <- "#a855f7"
-col_unm <- "0F1D32"
-col_jags <- "#111820"
+col_rtmb <- "#1b9e77"
+col_unm <- "#d95f02"
+col_jags <- "#7570b3"
 
 # -----------------------------------------------------------
 # Timing summary table (mean seconds per fit, by model x framework)

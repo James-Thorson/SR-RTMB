@@ -53,8 +53,6 @@ Relative bias, `(estimate - truth) / truth`, across simulated datasets, one pane
 
 ![Timing](plots/timing_violin.png)
 
-JAGS timings include the full chain: adaptation, burnin, and sampling. All three frameworks fit identical simulated datasets. `unmarked`'s occupancy fit uses a closed-form marginal likelihood, so it's expected to beat RTMB there; JAGS is expected to be far slower on Dail-Madsen since it samples the full latent state space (`N_it`, `S_it`) via Gibbs steps at every site and time step.
-
 ### Convergence
 
 Convergence is assessed via the Gelman-Rubin R-hat statistic (Gelman & Rubin 1992) across 4 chains; a fit is flagged converged when R-hat \< 1.1 for all monitored parameters. Rates are printed to console by `make plots`. Dail-Madsen's lower convergence rate reflects the difficulty of sampling its high-dimensional latent state space directly.
