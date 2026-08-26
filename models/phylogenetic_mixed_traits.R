@@ -3,7 +3,8 @@
 # Copied from: C:\Users\jtuth\Desktop\Work\Collab-2026\2026 -- sequential reduction\state_switching_20226-08-23.R
 #################
 
-# Make sure to use github version of RTMB
+# Make sure to use github version of TMB and RTMB
+# pak::pak("kaskr/adcomp/TMB")
 # pak::pak("kaskr/RTMB/RTMB")
 
 data_dir = "data"
