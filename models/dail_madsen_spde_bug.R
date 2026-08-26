@@ -61,14 +61,15 @@ par <- list(
   ln_tauO = log(1),
   ln_kappa = log(1),
   omega_s = rep(0, mesh$n),
-  S = matrix(K, nrow = M, ncol = T - 1),
-  N = matrix(K, nrow = M, ncol = T)
+  SN = matrix(K, nrow = M, ncol = 2*T-1)
 )
 
 f <- function(par) {
   "[<-" <- ADoverload("[<-")
   "c" <- ADoverload("c")
   getAll(dat, par, warn = FALSE)
+  S <- SN[, seq_len(T-1)]
+  N <- SN[, T-1+seq_len(T)]
   gamma <- exp(log_gamma)
   omega <- plogis(logit_omega)
   p <- plogis(logit_p)
@@ -95,10 +96,9 @@ f <- function(par) {
 ################
 
 obj <- MakeADFun(f, par,
-  random = c("omega_s", "N", "S"),
+  random = c("omega_s", "SN"),
   integrate = list(
-    S = TMB::SR(0:K, discrete = TRUE),
-    N = TMB::SR(0:K, discrete = TRUE)#,
+    SN = TMB::SR(0:K, discrete = TRUE)
     #omega_s = TMB:::LA()
   ),
   silent = TRUE
@@ -112,10 +112,9 @@ opt <- nlminb(obj$par, obj$fn, obj$gr,
 ################
 
 obj2 <- MakeADFun(f, par,
-  random = c("omega_s", "N", "S"),
+  random = c("omega_s", "SN"),
   integrate = list(
-    S = TMB::SR(0:K, discrete = TRUE),
-    N = TMB::SR(0:K, discrete = TRUE),
+    SN = TMB::SR(0:K, discrete = TRUE),
     omega_s = TMB:::LA()
   ),
   silent = TRUE
@@ -123,5 +122,22 @@ obj2 <- MakeADFun(f, par,
 opt2 <- nlminb(obj2$par, obj2$fn, obj2$gr,
   control = list(eval.max = 1e4, iter.max = 1e4, trace = 1)
 )
+
+################
+# LA using intern
+################
+
+obj3 <- MakeADFun(f, par,
+  random = c("omega_s", "SN"),
+  integrate = list(
+    SN = TMB::SR(0:K, discrete = TRUE)
+  ),
+  silent = TRUE,
+  intern = TRUE
+)
+opt3 <- nlminb(obj2$par, obj2$fn, obj2$gr,
+  control = list(eval.max = 1e4, iter.max = 1e4, trace = 1)
+)
+
 
 
