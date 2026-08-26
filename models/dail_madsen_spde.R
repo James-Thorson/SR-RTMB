@@ -26,10 +26,8 @@ library(patchwork)
 dir.create("plots", showWarnings = FALSE)
 
 set.seed(1234)
-
 M <- 200
 T <- 3
-K <- 10
 
 # true parameters
 mu_lambda_true <- log(3.5)
@@ -67,6 +65,8 @@ for (t in 1:(T - 1)) {
   N[, t + 1] <- rbinom(M, N[, t], omega_true) + rpois(M, gamma_true)
 }
 y <- matrix(rbinom(M * T, N, p_true), M, T)
+K <- max(y) * 2
+if(K > 30) stop("check")
 
 # -------------------------------------------------------------
 # 2. plot: mesh and site locations
@@ -115,7 +115,7 @@ f <- function(par) {
     mu = 0, Q = Q, log = TRUE,
     scale = 1 / exp(ln_tauO)
   )
-  lambda_i <- exp(mu_lambda + A_is %*% omega_s)
+  lambda_i <- exp(mu_lambda + (A_is %*% omega_s)[,1])
 
   jnll <- jnll - sum(dbinom(S, N[, 1:(T - 1)], omega, log = TRUE), na.rm = TRUE)
   jnll <- jnll - sum(dpois(N[, 1], lambda_i, log = TRUE), na.rm = TRUE)
@@ -126,16 +126,19 @@ f <- function(par) {
   jnll <- jnll - sum(dbinom(y, size = N, prob = p, log = TRUE), na.rm = TRUE)
   jnll
 }
+f(par)
+K
 
 obj <- MakeADFun(f, par,
   random = c("omega_s", "N", "S"),
   integrate = list(
     S = TMB::SR(0:K, discrete = TRUE),
     N = TMB::SR(0:K, discrete = TRUE)
-  )
+  ),
+  silent = TRUE
 )
 opt <- nlminb(obj$par, obj$fn, obj$gr,
-  control = list(eval.max = 1e4, iter.max = 1e4)
+  control = list(eval.max = 1e4, iter.max = 1e4, trace = 1)
 )
 sdr <- sdreport(obj)
 
