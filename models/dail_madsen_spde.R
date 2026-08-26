@@ -3,14 +3,14 @@
 # SPDE approach used in spatio-temporal models for ecologists
 # =============================================================
 #
-# N_i1 ~ Poisson(lambda_i),  log(lambda_i) = mu_lambda + omega_i
+# N_i1 ~ Poisson(lambda_i),  log(lambda_i) = mu_lambda + epsilon_i
 # S_it ~ Binomial(N_it, omega)
 # G_it ~ Poisson(gamma)
 # N_i,t+1 = S_it + G_it
 # y_it ~ Binomial(N_it, p)
-# omega_s ~ GMRF(0, Q / tau^2)
+# epsilon_s ~ GMRF(0, Q / tau^2)
 #
-# omega_s is continuous, integrated out via RTMB's Laplace approximation;
+# epsilon_s is continuous, integrated out via RTMB's Laplace approximation;
 # N_it and S_it are discrete, marginalized jointly via Sequential Reduction
 # (SR) over {0, ..., K} - the same redux state-space formulation used in
 # models/dail_madsen.R.
@@ -25,19 +25,19 @@ library(patchwork)
 
 dir.create("plots", showWarnings = FALSE)
 
-set.seed(1234)
+#set.seed(1234)
 M <- 200
 T <- 3
 
 # true parameters
-mu_lambda_true <- log(3.5)
+mu_lambda_true <- log(2.5)
 omega_true <- 0.7
 gamma_true <- 1.5
 p_true <- 0.4
-omega_range <- 0.3
-omega_SD <- 1
-ln_kappa_true <- log(sqrt(8) / omega_range)
-ln_tauO_true <- log(1 / (omega_SD * exp(ln_kappa_true) * sqrt(4*pi)))
+epsilon_range <- 0.3
+epsilon_SD <- 0.5
+ln_kappa_true <- log(sqrt(8) / epsilon_range)
+ln_tau_true <- log(1 / (epsilon_SD * exp(ln_kappa_true) * sqrt(4*pi)))
 
 # -------------------------------------------------------------
 # 1. simulation
@@ -55,14 +55,15 @@ Q_sim <- exp(4 * ln_kappa_true) * spde$c0 +
 
 # draw spatial field on mesh vertices
 L <- chol(as.matrix(Q_sim))
-omega_v <- backsolve(L, rnorm(mesh$n)) / exp(ln_tauO_true)
-omega_i <- as.numeric(A_is %*% omega_v)
-lambda_i <- exp(mu_lambda_true + omega_i)
+epsilon_v <- backsolve(L, rnorm(mesh$n)) / exp(ln_tau_true)
+epsilon_i <- as.numeric(A_is %*% epsilon_v)
+lambda_i <- exp(mu_lambda_true + epsilon_i)
+gamma_i <- gamma_true * exp(epsilon_i)
 
 N <- matrix(NA, M, T)
 N[, 1] <- rpois(M, lambda_i)
 for (t in 1:(T - 1)) {
-  N[, t + 1] <- rbinom(M, N[, t], omega_true) + rpois(M, gamma_true)
+  N[, t + 1] <- rbinom(M, N[, t], omega_true) + rpois(M, gamma_i)
 }
 y <- matrix(rbinom(M * T, N, p_true), M, T)
 K <- max(y) * 2
@@ -95,10 +96,11 @@ par <- list(
   log_gamma = log(1),
   logit_omega = 0,
   logit_p = 0,
-  ln_tauO = log(1),
+  ln_tau = log(1),
   ln_kappa = log(1),
-  omega_s = rep(0, mesh$n),
+  epsilon_s = rep(0, mesh$n),
   S = matrix(K, nrow = M, ncol = T - 1),
+  #G = matrix(K, nrow = M, ncol = T - 1),
   N = matrix(K, nrow = M, ncol = T)
 )
 
@@ -111,17 +113,18 @@ f <- function(par) {
   p <- plogis(logit_p)
 
   Q <- exp(4 * ln_kappa) * M0 + 2 * exp(2 * ln_kappa) * M1 + M2
-  jnll <- -dgmrf(omega_s,
+  jnll <- -dgmrf(epsilon_s,
     mu = 0, Q = Q, log = TRUE,
-    scale = 1 / exp(ln_tauO)
+    scale = 1 / exp(ln_tau)
   )
-  lambda_i <- exp(mu_lambda + (A_is %*% omega_s)[,1])
+  lambda_i <- exp(mu_lambda + (A_is %*% epsilon_s)[,1])
+  gamma_i <- gamma * exp(A_is %*% epsilon_s)[,1]
 
   jnll <- jnll - sum(dbinom(S, N[, 1:(T - 1)], omega, log = TRUE), na.rm = TRUE)
   jnll <- jnll - sum(dpois(N[, 1], lambda_i, log = TRUE), na.rm = TRUE)
   for (t in 1:(T - 1)) {
     G <- N[, t + 1] - S[, t]
-    jnll <- jnll - sum(dpois(G, gamma, log = TRUE), na.rm = TRUE)
+    jnll <- jnll - sum(dpois(G, gamma_i, log = TRUE), na.rm = TRUE)
   }
   jnll <- jnll - sum(dbinom(y, size = N, prob = p, log = TRUE), na.rm = TRUE)
   jnll
@@ -130,7 +133,7 @@ f(par)
 K
 
 obj <- MakeADFun(f, par,
-  random = c("omega_s", "N", "S"),
+  random = c("epsilon_s", "N", "S"),
   integrate = list(
     S = TMB::SR(0:K, discrete = TRUE),
     N = TMB::SR(0:K, discrete = TRUE)
@@ -149,17 +152,17 @@ sdr <- sdreport(obj)
 est <- summary(sdr, "fixed")
 
 print(data.frame(
-  parameter = c("mu_lambda", "gamma", "omega", "p", "ln_tauO", "ln_kappa"),
+  parameter = c("mu_lambda", "gamma", "omega", "p", "ln_tau", "ln_kappa"),
   truth = c(
     mu_lambda_true, gamma_true, omega_true, p_true,
-    ln_tauO_true, ln_kappa_true
+    ln_tau_true, ln_kappa_true
   ),
   estimate = c(
     est["mu_lambda", "Estimate"],
     exp(est["log_gamma", "Estimate"]),
     plogis(est["logit_omega", "Estimate"]),
     plogis(est["logit_p", "Estimate"]),
-    est["ln_tauO", "Estimate"],
+    est["ln_tau", "Estimate"],
     est["ln_kappa", "Estimate"]
   )
 ), digits = 3)
@@ -168,13 +171,13 @@ print(data.frame(
 # 5. plot: estimated vs true spatial field
 # -------------------------------------------------------------
 
-omega_est_sites <- as.numeric(A_is %*% obj$env$parList()$omega_s)
-lim <- max(abs(c(omega_i, omega_est_sites)))
+epsilon_est_sites <- as.numeric(A_is %*% obj$env$parList()$epsilon_s)
+lim <- max(abs(c(epsilon_i, epsilon_est_sites)))
 mesh_sfc <- fm_as_sfc(mesh)
 
 field_dat <- rbind(
-  data.frame(x = coords[, "x"], y = coords[, "y"], omega = omega_i, panel = "true"),
-  data.frame(x = coords[, "x"], y = coords[, "y"], omega = omega_est_sites, panel = "estimated")
+  data.frame(x = coords[, "x"], y = coords[, "y"], omega = epsilon_i, panel = "true"),
+  data.frame(x = coords[, "x"], y = coords[, "y"], omega = epsilon_est_sites, panel = "estimated")
 )
 
 plot_field <- function(df, title) {
