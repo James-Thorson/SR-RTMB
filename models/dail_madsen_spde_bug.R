@@ -135,7 +135,43 @@ obj3 <- MakeADFun(f, par,
   silent = TRUE,
   intern = TRUE
 )
-opt3 <- nlminb(obj2$par, obj2$fn, obj2$gr,
+opt3 <- nlminb(obj3$par, obj3$fn, obj3$gr,
+  control = list(eval.max = 1e4, iter.max = 1e4, trace = 1)
+)
+
+
+################
+# LA using internwith Kasper fix
+################
+
+obj4 <- MakeADFun(f, par,
+  random = c("omega_s", "SN"),
+  integrate = list(
+    SN = TMB::SR(0:K, discrete = TRUE)
+  ),
+  silent = TRUE,
+  intern = TRUE,
+  inner.control = list(decompose=FALSE)
+)
+opt4 <- nlminb(obj4$par, obj4$fn, obj4$gr,
+  control = list(eval.max = 1e4, iter.max = 1e4, trace = 1)
+)
+sdr4 = sdreport(obj4)
+
+################
+# integrate = LA() using inner.control ... still degenerate
+################
+
+obj5 <- MakeADFun(f, par,
+  random = c("omega_s", "SN"),
+  integrate = list(
+    SN = TMB::SR(0:K, discrete = TRUE),
+    omega_s = TMB:::LA()
+  ),
+  silent = TRUE,
+  inner.control = list(decompose=FALSE)
+)
+opt5 <- nlminb(obj5$par, obj5$fn, obj5$gr,
   control = list(eval.max = 1e4, iter.max = 1e4, trace = 1)
 )
 
