@@ -20,9 +20,9 @@ library(fmesher)
 library(ggplot2)
 library(patchwork)
 
-set.seed(1234)
+set.seed(54321)
 M <- 200
-T <- 3
+T <- 4
 nsim <- 100
 
 # true parameters
@@ -74,13 +74,13 @@ for (s in 1:nsim) {
     N[, t + 1] <- rbinom(M, N[, t], omega_true) + rpois(M, gamma_i)
   }
   y <- matrix(rbinom(M * T, N, p_true), M, T)
-  K <- max(y) * 2
+  K <- max(y) * 3
   
   # leave Jim's control look in here for now...
-  if (K > 30) { 
-    warning("replicate ", s, ": K = ", K, " too large, skipping")
-    next
-  }
+  # if (K > 30) { 
+  #   warning("replicate ", s, ": K = ", K, " too large, skipping")
+  #   next
+  # }
 
   # -------------------------------------------------------------
   # fit
