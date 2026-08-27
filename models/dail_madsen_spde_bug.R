@@ -175,5 +175,21 @@ opt5 <- nlminb(obj5$par, obj5$fn, obj5$gr,
   control = list(eval.max = 1e4, iter.max = 1e4, trace = 1)
 )
 
+################
+# integrate = LA( decompose=as.double(FALSE) ) ... still degenerate
+################
+
+obj6 <- MakeADFun(f, par,
+  random = c("omega_s", "SN"),
+  integrate = list(
+    SN = TMB::SR(0:K, discrete = TRUE),
+    omega_s = TMB:::LA( decompose=as.double(FALSE) )
+  ),
+  silent = TRUE
+)
+opt6 <- nlminb(obj6$par, obj6$fn, obj6$gr,
+  control = list(eval.max = 1e4, iter.max = 1e4, trace = 1)
+)
+
 
 
