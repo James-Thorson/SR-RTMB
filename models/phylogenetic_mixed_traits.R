@@ -128,7 +128,10 @@ get_jnll(p, what = "all")
 obj = MakeADFun(
   get_jnll,
   parameters = p,
-  integrate = list( x1_v = TMB::SR(c(0,1), discrete=TRUE), x2_v = TMB:::LA() ),
+  integrate = list(
+    x1_v = TMB::SR(c(0,1), discrete=TRUE),
+    x2_v = TMB:::LA( decompose=as.double(FALSE) )
+  ),
   random = c("x1_v","x2_v"),
   map = map
 )
