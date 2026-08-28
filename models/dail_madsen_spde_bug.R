@@ -190,6 +190,12 @@ obj6 <- MakeADFun(f, par,
 opt6 <- nlminb(obj6$par, obj6$fn, obj6$gr,
   control = list(eval.max = 1e4, iter.max = 1e4, trace = 1)
 )
-
-
-
+sdr6 = sdreport( obj6 )
+plot(
+  as.list(sdr6, what = "Estimate")$omega_s,
+  omega_v
+)
+plot(
+  as.list(sdr6, what = "Estimate")$SN[,T-1+seq_len(T)],
+  N
+)
