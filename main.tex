@@ -21,7 +21,10 @@
 \usepackage{amsbsy}
 \usepackage{epsfig}
 \usepackage{subfig}
+\usepackage{upgreek}
 \usepackage{bm}
+\newcommand{\vect}[1]{\bm{#1}}
+\newcommand{\mat}[1]{\bm{#1}}
 \usepackage{xspace}
 \usepackage{color}
 \usepackage{subfloat}
@@ -50,7 +53,7 @@
 
 \usepackage{booktabs}
 \usepackage[round]{natbib}
-\bibliographystyle{fishfish}
+\bibliographystyle{apalike}
 \bibpunct{(}{)}{,}{a}{}{,}
 \usepackage{authblk}
 \usepackage{pdflscape}
@@ -100,7 +103,7 @@ Automated sequential reduction for continuous and discrete latent variables in e
 }
 
 % Tentative order 
-\author[1,*]{Chris Cahill} % ORCID: 0000-0002-3841-4044
+\author[1,*]{Christopher L. Cahill} % ORCID: 0000-0002-3841-4044
 \author[2]{James T. Thorson} % 0000-0001-9563-1937
 \author[3]{Kasper Kristensen} % 0000-0001-7415-1010
 
@@ -146,7 +149,7 @@ Automated sequential reduction for continuous and discrete latent variables in e
 % for ices: 350 word limit for MEE (currently 350)
 \section{Abstract}
 
-Statistical models representing ecological and evolutionary dynamics often include latent variables, which can be either continuous- (e.g., average body size) or discrete-valued (numerical abundance).  Mixed-type hierarchical models are fitted using Markov chain Monte Carlo (MCMC), but this can be prohibitively slow for large models.  Here, we introduce an alternative approach in the R-package RTMB, which automates sequential reduction to efficiently marginalize a sequence of low-dimensional cliques in discrete-valued variables, uses automatic differentiation and the Laplace approximation to efficiently calculate the derivative of the log-marginal likelihood, and then calculates posterior predictions as either the mean or mode for both variable types.  We specifically demonstrate the speed and flexibility of mixed-type hierarchical models using demographic examples (dynamic occupancy, N-mixture, open dynamic N-mixture), where we compare RTMB with existing single-purpose benchmark software.  We then develop a novel mixed-type model for phylogenetic trait imputation, where we jointly impute a binary variable (viviparity) while estimating its switching rates, and also estimate its impact on a continuous variable (body size) during ancestral trait imputation for a published data set of female \textit{Liolaemus} lizards.  In both demographic and evolutionary examples, we visualize the automatically identified ordering for discrete-valued variables, and emphasize the simple workflow for bespoke model development.  We envision that easy and efficient access to mixed-type models will allow more expressive representation of evolutionary and ecological dynamics.
+Statistical models representing ecological and evolutionary dynamics often include latent variables, which can be either continuous- (e.g., average body size) or discrete-valued (e.g., numerical abundance).  Mixed-type hierarchical models are often fitted using Markov chain Monte Carlo (MCMC), but this can be prohibitively slow for large models.  Here, we introduce an alternative approach in the R-package RTMB, which automates sequential reduction to efficiently marginalize a sequence of low-dimensional cliques in discrete-valued variables, uses automatic differentiation and the Laplace approximation to efficiently calculate the derivative of the log-marginal likelihood, and then calculates posterior predictions as either the mean or mode for both variable types.  We specifically demonstrate the speed and flexibility of mixed-type hierarchical models using demographic examples (dynamic occupancy, N-mixture, open dynamic N-mixture), where we compare RTMB with existing single-purpose benchmark software.  We then develop two novel examples that are feasible using mixed-type hierarchical models.  This first involves a multi-site open N-mixture model with a spatial latent variable for site-specific recruitment.  This example confirms that continuous-valued Gaussian Markov random fields can be estimated jointly with discrete-valued abundance dynamics.  The second involves phylogenetic trait imputation, where we jointly impute a binary variable (viviparity) while estimating its state-switching rates, and also estimate its impact on a continuous variable (body size) during ancestral trait imputation for a published data set of female \textit{Liolaemus} lizards.  This example indicates that phylogenetic comparative methods can estimate linkages among discrete and continuous-valued traits.  We envision that intuitive and efficient specification of mixed-type models will allow more expressive representation of ecological and evolutionary dynamics.
 
 
 \vspace*{\fill}
@@ -158,39 +161,99 @@ Keywords: Sequential reduction; hierarchical model; automatic differentiation; L
 \section{Introduction}
 
 
-[Paragraph 1: Why bespoke models]
+[Why bespoke models]
 
-Ecologists develop bespoke models for a wide range of ecological and evolutionary dynamics.  
+Ecologists develop bespoke models to represent a wide range of ecological and evolutionary dynamics. For example, marine scientists must often develop purpose-built demographic models that not only represent the specific data availability and dynamics of a given system, but also help to inform stakeholders or managers on policy-relevant questions \citep{schaub_lessons_2024}.  Evolutionary ecologists develop phylogenetic models that estimate hypothesized associations among species traits \citep{harmon_phylogenetic_2018}. Similarly, community ecologists develop joint species distribution models while leveraging demographic and habitat linkages among species \citep{sharma_no_2025}.  Developing custom-built models for specific taxa, systems, and processes remains a core activity for applied and theoretical ecologists.     
+\newline 
 
-[2: Computational approaches and Gibbs sampling]
+\noindent [Automatic differentiation and Laplace approximation] 
 
-[3: Automatic differentiation]
+Over the past twenty years, ecologists have embraced hierarchical modeling, where dynamics are represented as a sequence of conditional distributions among latent (unobserved) variables given estimated rate parameters, and the distribution of data is  specified conditional upon these latent variables \citep{royle_hierarchical_2008}. Estimating hierarchical models requires marginalizing across the distribution for latent variables, which is then done using Markov chain Monte Carlo (MCMC) or by approximating them using multivariate normal distribution using the ''Laplace approximation''.  The Laplace approximation is computationally efficient for continuous-valued random effects, where automatic differentiation (AD) can be used to cheaply evaluate the gradient of a user-specified model \citep{skaug_automatic_2006}.  Similarly, AD is helpful during MCMC sampling, e.g., using STAN \cite{gelman_stan_2015}, where it can substantially improve sampling efficiency.  However, the Laplace approximation is not easy to adapt to marginalize across discrete-valued latent variables, which arise naturally in many ecological and evolutionary systems.  Instead, discrete-valued variables that are dynamic in one dimension (e.g., behavioral state-swiching in movement models) can be solved using hidden Markov models, e.g., using a forward filter to estimate parameters and a backwards smoother to predict states (PATTERSON 2009).  However, these HMMs are harder to solve for dynamics arise from multiple discrete-valued states (which then requires computing the discrete convolution of latent variables) or when the ordering of states includes multiple dimensions (e.g., for spatial interactions, e.g., the spatial Ising process).  \newline 
 
-[4: Sequential reduction]
+\noindent [Computational approaches and Gibbs sampling]
 
-[5: Purpose of paper]
+As one specific example, applied ecologists fit dynamic occupancy models, where occupancy status is estimated as a binary latent variable and samples are treated as Bernoulli draw given this occupancy status \citep{mackenzie_estimating_2002}.  Dynamic (or ''open'') occupancy models then extend this by allowing occupancy status to change over time due to estimated colonization and extirpation rates \citep{mackenzie_estimating_2003}.  This dynamic occupancy model therefore requires estimating both discrete-valued occupancy status, and continuous-valued rate parameters.  These models are then fitted in two main ways:
+\begin{itemize}
+    \item Bayesian models can be fitted by specifying a sequence of conditional distributions for states and data.  Bespoke Bayesian models are easily specified using high-level code such as JAGS, which then implements Gibbs sampling for discrete-valued occupancy status;  
+    \item Maximum likelihood (ML) estimation typically requires calculating the probability across states, e.g., using a Hidden Markov model.  This specification requires more user knowledge to develop efficient code, and optimized code is often then distributed in packaged code, e.g., \texttt{unmarked} \citep{fiske_unmarked:_2011}. 
+\end{itemize}
+Bayesian estimation requires sampling from a posterior distribution of parameters, and remains much slower than comparable ML methods.  However, there is no high-level language to specific the conditional distribution of process and data that can simultaneous marginalize across both discrete- and continuous-valued variables.  
+\newline 
+
+\noindent [Sequential reduction] \newline 
+In the following, we focus upon the Sequential Reduction (SR) algorithm (OGDEN), which can be viewed as a generalization of the hidden Markov models (HMMs) that are already used in ecology.  SR requires identifying a computational tree, where the probability mass function for each discrete variable depends upon only a small subset of variables that have previously been estimated \citep{hojsgaard_graphical_2012}.  This ``clique`` of previously computed variables can be automatically detected from the computational tree that is also used during AD.  However, we are not aware of any ecological papers that use SR to marginalize across discrete-valued variables either using high-level (expressive) model building code, or in combination with integrating across continuous-valued variables in a mixed-type hierarchical model.  \newline
+
+\noindent [Purpose of paper]
+
+Here, we introduce a general approach for fitting mixed-type hierarchical models—those containing both continuous and discrete latent variables—using the R package RTMB. Our approach automates sequential reduction of discrete latent states and combines it with automatic differentiation and the Laplace approximation to enable fast, gradient-based inference as an alternative to MCMC. We first benchmark the approach against existing single-purpose software using three widely used demographic models with discrete latent states—occupancy, N-mixture, and open N-mixture—comparing parameter recovery, runtime, and convergence. We then demonstrate the generality of the approach with two bespoke mixed-type models: an open N-mixture model with latent spatial variation in recruitment, and a phylogenetic trait-imputation model that jointly estimates switching rates for a discrete trait (viviparity) and its effect on a continuous trait (body size) along an estimated phylogeny. Both models fit in seconds, illustrating the potential for substantially faster inference than analogous MCMC implementations for problems of this size. Across these applications, we provide a practical workflow for developing bespoke mixed-type hierarchical models in RTMB and show how sequential reduction extends the TMB/RTMB ecosystem to models with discrete random effects. This work opens the door to important ecological and evolutionary problems that were previously difficult to address within existing AD frameworks.
+
 
 \section{Methods}
 
+\subsection{Demographic models relative to existing benchmark software}
+
+
+\subsection{Spatial open N-mixture model}
+To demonstrate mixed-type hierarchical models, we develop the first (to our knowledge) model that includes open abundance demographics for multiple sites, where site-specific recruitment (and resulting abundance) varies among sites following a spatial continuous-valued latent variable.  
+
+\subsection{Phylogenetic trait imputation}
+To demonstrate sequential reduction and mixed-type hierarchical models for evolutionary dynamics, we introduce a novel model for phylogenetic trait imputation (PTI).  We start with a dated phylogenetic tree, where we seek to estimate a vector of traits $\bm{z}_n =(z_{n1},z_{n2})$ for each node $n$, where $z_1$ is a discrete-valued trait and $z_2$ is a continuous-valued trait, $n\in \{1,...,n_{tip}\}$ indexes the tips, and $n\in \{ n_{tip}+1,...,N\}$ indexes the ancestral nodes.  The tree also includes $J$ edges $e_j$, where each edge has length $l_j$ and connects parent node $n_{p[j]}$ and child node $n_{c[j]}$.   
+
+We specifically define a state-switching process for the categorical trait and a Brownian motion model for the continuous trait.  To define this, we first introduce a ``one-hot encoding`` function $O(z_{n1})$, which converts the categorical trait with $K$ levels for node $n$ to a $K$ length indicator vector with a one for the indicated level.  We then define a conditional process for child nodes given their parent:
+
+\begin{align}
+    O(z_{c[j]1}) &\sim \mathrm{Categorical}\left( O(z_{p[j]1})^T e^{l_j\mat{Q}} \right) \\
+    z_{c[j]2} &\sim \mathrm{Normal}\left( \vect{\beta} (O(z_{c[j]1}) - O(z_{p[j]1})) + z_{p[j]2} , l_j \sigma^2 \right)    
+\end{align}
+
+\noindent where $\mat{Q}$ is the $K \times K$ generator matrix for the instantaneous state-switching rate, and $\vect{\beta}$ is the impact of each level of the categorical trait on the continuous trait (where we fix $\beta_1=0$ for identifiability). Instantaneous transition rates $\mat{Q}$ is constructed such that rows sum to one, and $e^{l_j\mat{Q}}$ is the time-integrated transition probability over evolutionary time $l_j$ separating a parent and child node.  Scientific knowledge can then be used to structure $\mat{Q}$, e.g., where (1) a symmetric transition rate indicates an equal probability of each trait-transition, and (2) a banded transition rate for $K \geq 3$ indicates that traits are naturally ordered such that level $K=1$ must transition to $K=2$ before moving to $K=3$.  We then complete the model by specifying a distribution for measurement errors:
+
+\begin{align}
+    O(y_{c[j]1}) &\sim \mathrm{Categorical}\left( O(z_{p[j]1})^T \mat{C} \right) \\
+    z_{c[j]2} &\sim \mathrm{Normal}\left( z_{p[j]2}, \sigma_M^2 \right)    
+\end{align}
+where $\vect{y_n}$ is the vector of trait measurements, $\mat{C}$ is the probability of misclassifying a given trait (``confusion matrix``), and $\sigma_M$ is the standard deviation for measurement errors in the continuous-valued trait. This state-space formulation allows us to impute missing trait-values for ancestral nodes or tips, and also accomodates a known or estimated magnitude for measurement errors in both trait types.  Although other packages can also impute missing categorical traits \citep{gendre_benchmarking_2023}, we are not aware of any R-package or published model that includes measurement errors, missing data, ancestral trait imputation, and estimated linkages among categorical and continuous-valued traits.  
+
+In the following, we demonstrate this mixed-type PTI model using previously published data for \textit{Liolaemus} lizards \citep{dominguez-guerrero_viviparity_2024}, using an ultrametric molecular phylogeny \citep{esquerre_how_2019}.  We extract viviparity $\vect{y}_1$ and female body size $\vect{y}_2$, and estimate a direct effect of viviparity on body size $\beta_2$ as well as one transition-rate parameter in the symmetric rate matrix $\mat{Q}$ while assuming a trivially small misclassification probability and estimating the measurement-error parameter $\sigma_M$.  We then evaluate the strength and significance of the direct effect, and visually inspect the reconstructed traits for ancestral taxa.  
 
 \section{Results}
 
+Comparing parameter estimates using sequential reduction (using RTMB), single-use benchmark software (\texttt{unmarked}), and bespoke Gibbs sampling (using \texttt{JAGS}) confirms that all implementations give similar estimates (Fig. \ref{fig:estimate_recovery}).  The main exception is for the open N-mixture model (Fig. \ref{fig:estimate_recovery}, right panel), where Gibbs sampling results in much wide estimation intervals for initial abundance and recruitment, presumably resulting from the influence of priors combined with somewhat uninformative data about those parameters in some simulation replicates.  However, comparing runtimes shows that RTMB is nearly faster than unmarked for occupancy and N-mixture models, and slightly slower for the open N-mixture model (Fig. \ref{fig:timing_violin}).  This difference arises despite unmarked using custom-build code that is optimized for these estimation problems.  Similarly, MCMC sampling using JAGS (green violin in Fig. \ref{fig:timing_violin}) is 10-100 times slower than either maximum-likelihood estimator.  For these widely used demographic models, there appears to be little cost to using automated software for Sequential Reduction, while still allowing user-specified choices via purpose-built code.         
+
+Next, we visualize a single replicate from the novel spatial open N-mixture model, which estimates a spatial latent variable via the Laplace approximation jointly with sequential reduction for the convolution of survival and recruitment.  This example runs in several seconds, and shows that site-specific recruitment can be accurately identified from an open N-mixture model (Fig. \ref{fig:spde_field}).
+
+Finally, we also visualize a novel phylogenetic trait imputation for a binary trait (viviparity) and its impact on a continuous trait (log10 body size) for a clade of lizards (Fig. \ref{fig:phylogeny}).  We specifically see a two monophyloetic groups (Fig. \ref{fig:phylogeny}, left-hand side) that are viviparous (i.e., yellow half-circle on right-hand-side facing outwards), and also generally have larger body sizes.  By contrast, other clades have a mix of viviparous and non-viviparous reproduction, and are often relatively smaller body sizes.  Importantly, the model also imputes these same traits for unobserved ancestral nodes (interior nodes in Fig. \ref{fig:phylogeny}), which provide a Markov bridge from the estimated root to each observed tip.  This combination of mixed-type traits and ancestral reconstruction ran in seconds, and is therefore feasible for small to medium-sized phylogenies such as this one.  
+
 \section{Discussion}
 
+Paragraph 1:  Review results and conclusions
 
-\bibliography{bib}
+\noindent Paragraph 2:  Other types of evolutionary and ecological models that are possible:
+\begin{itemize}
+    \item Ising model
+    \item breakpoint models
+    \item spatial capture-recapture
+    \item state-switching movement models
+\end{itemize}
 
-\section{Tables}
+\noindent Paragraph 3:  Testing performance for posterior mode vs. mean
 
-Add table for timings here
+\noindent Paragraph 4:  Measuring complexity and effective degrees of freedom
 
+\noindent Paragraph X:  next steps
+
+\bibliography{thorson_citations}
 
 \clearpage
 
 \section{Figures}
 
 \begin{figure}[htb]
-Fig. 1 -- show sequential reduction conceptual figure ... perhaps the dependency graph, with clique sequence color-coded
+    \centering
+    \includegraphics[width=1\textwidth]{figures/sequential_reduction.png}
+    \caption{Illustration of sequential reduction algorithm.
+    }
+    \label{fig:sequential_reduction}
 \end{figure}
 
 \clearpage
@@ -207,10 +270,20 @@ Fig. 1 -- show sequential reduction conceptual figure ... perhaps the dependency
 
 \begin{figure}[htb]
     \centering
-    \includegraphics[width=1\textwidth]{figures/spde_field.png}
-    \caption{Simulated (left) and estimated (right) recruitment rate for a multi-site Dail-Madsen model.   
+    \includegraphics[width=1\textwidth]{figures/timing_violin.png}
+    \caption{Run times (y-axis on log-scale) for each estimation model (x-axis) for the occupancy (left), closed N-mixture (middle), or open N-mixture (right) models.
     }
-    \label{fig:spde}
+    \label{fig:timing_violin}
+\end{figure}
+
+\clearpage
+
+\begin{figure}[htb]
+    \centering
+    \includegraphics[width=1\textwidth]{figures/spde_field.png}
+    \caption{Simulated (left) and estimated (right) recruitment rate $log(\gamma_s) = \mu+\omega_s$ where $\bm{\omega}$ follows a Gaussian Markov random field, using an open N-mixture model for dynamics at each site $s \in {1,2,...,S}$.   
+    }
+    \label{fig:spde_field}
 \end{figure}
 
 \clearpage
