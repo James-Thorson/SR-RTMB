@@ -11,11 +11,6 @@
 #   p      = probability of detecting an individual
 #   N_i    = true (latent) abundance at site i
 #   y_ij   = count at site i, occasion j
-#
-# The marginal likelihood integrates out N_i via sequential reduction (SR):
-#   L(lambda, p) = prod_i sum_{k=0}^{K} Poisson(k|lambda) * prod_j Binomial(y_ij|k,p)
-#
-# JAGS fits the same hierarchical model via MCMC, sampling N_i explicitly.
 
 library(RTMB)
 library(unmarked)
@@ -103,8 +98,6 @@ fit_all_nmix <- function(seed, R, T, lambda_true, p_true,
     )
   }
 
-  # This is a timing comparison against RTMB/unmarked, so JAGS chains run
-  # in parallel (one per core) rather than sequentially.
   jags.seed <- sample.int(1e6, 1)
   time_jags <- system.time({
     fit_jags <- tryCatch(
@@ -121,7 +114,10 @@ fit_all_nmix <- function(seed, R, T, lambda_true, p_true,
           n.thin = n.thin,
           jags.seed = jags.seed,
           envir = environment(),
-          export_obj_names = c("y", "lambda_true", "n.chains", "n.iter", "n.burnin", "n.thin", "jags.seed")
+          export_obj_names = c(
+            "y", "lambda_true", "n.chains",
+            "n.iter", "n.burnin", "n.thin", "jags.seed"
+          )
         )
       ),
       error = function(e) NULL

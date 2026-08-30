@@ -12,10 +12,6 @@
 #   z_i  = true (latent) occupancy at site i
 #   y_ij = detection/non-detection at site i, occasion j
 #
-# The marginal likelihood automatically marginalizes out z_i via SR:
-#   L(psi, p) = prod_i sum_{k in {0,1}} Bernoulli(k|psi) * prod_j Bernoulli(y_ij|k*p)
-#
-# JAGS fits the same hierarchical model via MCMC, sampling z_i explicitly.
 
 library(RTMB)
 library(unmarked)
@@ -106,8 +102,6 @@ fit_all_occ <- function(seed, R, T, psi_true, p_true,
     )
   }
 
-  # This is a timing comparison against RTMB/unmarked, so JAGS chains run
-  # in parallel (one per core) rather than sequentially.
   jags.seed <- sample.int(1e6, 1)
   time_jags <- system.time({
     fit_jags <- tryCatch(
@@ -124,7 +118,10 @@ fit_all_occ <- function(seed, R, T, psi_true, p_true,
           n.thin = n.thin,
           jags.seed = jags.seed,
           envir = environment(),
-          export_obj_names = c("y", "n.chains", "n.iter", "n.burnin", "n.thin", "jags.seed")
+          export_obj_names = c(
+            "y", "n.chains", "n.iter",
+            "n.burnin", "n.thin", "jags.seed"
+          )
         )
       ),
       error = function(e) NULL

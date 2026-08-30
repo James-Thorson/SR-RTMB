@@ -15,8 +15,6 @@
 #   Z_it   = true (latent) occupancy at site i, season t
 #   y_itj  = detection/non-detection at site i, season t, occasion j
 #
-# unmarked fits the same model via colext(), where col = lambda and
-# ext = 1 - omega. JAGS fits it via MCMC, sampling Z_it explicitly.
 
 library(RTMB)
 library(unmarked)
@@ -138,8 +136,6 @@ fit_all_dynocc <- function(seed, M, T, nrep, psi_true, omega_true, lambda_true, 
     )
   }
 
-  # This is a timing comparison against RTMB/unmarked, so JAGS chains run
-  # in parallel (one per core) rather than sequentially.
   jags.seed <- sample.int(1e6, 1)
   time_jags <- system.time({
     fit_jags <- tryCatch(

@@ -50,12 +50,7 @@ res <- matrix(NA_real_,
 )
 converged <- rep(FALSE, nsim)
 elapsed_sec <- rep(NA, nsim)
-# Snapshot of the fields the post-loop spatial-field plot needs, taken from
-# whichever replicate last converged - NOT whatever the loop variables
-# happen to hold when it ends, since the final replicate can still fail to
-# fit (MakeADFun error or non-convergence) and leave A_is/mesh mismatched
-# with obj/epsilon_i from an earlier replicate.
-last_fit <- NULL
+last_fit <- NULL # for plotting the fields
 
 for (s in 1:nsim) {
   cat("replicate", s, "of", nsim, "\n")
@@ -253,7 +248,6 @@ fig_field <- plot_field(
 
 # -------------------------------------------------------------
 # violin plot: relative bias of estimates vs. truth, by parameter
-# (style matches R/plotting.R::plot_estimate_recovery)
 # -------------------------------------------------------------
 
 relbias_long <- do.call(rbind, lapply(names(truth), function(param) {
@@ -263,9 +257,7 @@ relbias_long <- do.call(rbind, lapply(names(truth), function(param) {
       results[[paste0(param, "_true")]]
   )
 }))
-# Ordering mirrors "Open N-mixture" in R/plotting.R::plot_estimate_recovery
-# (lambda, p, gamma, omega), with the spatial-field params new to this
-# script (ln_tau, ln_kappa) appended after.
+
 relbias_long$parameter <- factor(relbias_long$parameter,
   levels = c("mu_lambda", "p", "gamma", "omega", "ln_tau", "ln_kappa")
 )
@@ -285,7 +277,7 @@ fig_bias <- ggplot(relbias_long, aes(x = parameter, y = rel_bias)) +
     p = expression(italic(p)),
     gamma = expression(gamma),
     omega = expression(omega),
-    # these are ln_tau/ln_kappa, not tau/kappa themselves
+    # these are ln_tau/ln_kappa, not tau/kappa themselves:
     ln_tau = expression(log(tau)),
     ln_kappa = expression(log(kappa))
   )) +
@@ -314,14 +306,12 @@ fig_time <- ggplot(results, aes(x = "", y = elapsed_sec, fill = "RTMB")) +
     axis.ticks.x = element_blank()
   )
 
-
 # -------------------------------------------------------------
 # combined: truth vs. estimates | timing / field
 # -------------------------------------------------------------
 
 fig_all <- fig_field / (fig_bias | fig_time) &
   theme(aspect.ratio = 1)
-
 
 ggsave("figures/open_nmixture_spde.png",
   fig_all,

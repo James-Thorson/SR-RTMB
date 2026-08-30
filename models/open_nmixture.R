@@ -21,12 +21,6 @@
 #   G_it   = recruits at site i from time t to t+1
 #   y_it   = count at site i, time t
 #
-# N_it and S_it are latent random effects, marginalized jointly by RTMB via
-# Sequential Reduction (SR) over {0, ..., K}:
-#   L_i = sum_{N_i1} ... sum_{N_iT} sum_{S_i1} ... sum_{S_i,T-1}
-#           Poisson(N_i1|lambda) * prod_t Binomial(S_it|N_it,omega) *
-#           Poisson(N_it+1-S_it|gamma) * Binomial(y_it|N_it,p)
-
 
 library(RTMB)
 library(unmarked)
@@ -48,7 +42,7 @@ n.iter <- 20000
 n.burnin <- 10000
 n.thin <- 1
 
-# JAGS model as a string - written to a temp file at runtime
+# JAGS model 
 jags_model_dm <- "
 model {
   # Priors
@@ -146,16 +140,9 @@ fit_jags_dm <- function(y, n.chains, n.iter, n.burnin, n.thin,
   # sequential jags() inheriting R's naturally-advancing RNG - makes every
   # chain's starting values IDENTICAL across every replicate and every run,
   # since seeds <- jags.seed + seq_len(n.chains) never changes. Draw a fresh
-  # one from R's already-seeded stream so inits actually vary per replicate.
+  # one from R's already-seeded stream so inits actually vary..
   jags.seed <- sample.int(1e6, 1)
 
-  # JAGS samples the full latent state explicitly here (no SR), making it
-  # the slowest fit in the pipeline - run its chains in parallel, one per
-  # core, instead of sequentially in a single process.
-  # jags.parallel() re-resolves these names on each worker (its internal
-  # .runjags() does eval(expression(n.iter)) etc., and inits() is called
-  # there too) rather than just inheriting fit_jags_dm's closure, so they
-  # all need to be listed explicitly here or the workers fail to find them.
   fit <- tryCatch(
     suppressWarnings(
       jags.parallel(
@@ -277,9 +264,6 @@ run_dailmadsen <- function(nsim, M, T,
     sim_dm(M, T, lambda_true, gamma_true, omega_true, p_true)
   })
 
-  # Each dataset timed individually for every framework, so per-sim times
-  # are always available and mean times are true per-fit times rather than
-  # wall-clock-divided-by-nsim.
   unm_raw <- vector("list", nsim)
   for (i in seq_along(datasets)) {
     y <- datasets[[i]]
