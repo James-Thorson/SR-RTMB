@@ -30,7 +30,7 @@ make NSIM=1   # debugging mode; else runs NSIM = 100 (set in Makefile)
 
 JAGS model convergence across simulations, regenerated from current `results/*.rds`:
 
-```
+```         
 Occupancy:         nsim=100  Rhat<1.1=100%
 Dynamic Occupancy: nsim=100  Rhat<1.1=100%
 N-mixture:         nsim=100  Rhat<1.1=86%
@@ -58,8 +58,8 @@ RAM:        251 GiB
 OS:         NixOS 26.11 (Zokor), Linux 7.1.5 x86_64
 R:          4.6.1
 BLAS/LAPACK: OpenBLAS 0.3.33, multi-threaded
-RTMB:       1.9 (kaskr/RTMB @ bcd126c, 2026-07-28)
-TMB:        1.9.25 (kaskr/adcomp @ 9ce0af2, 2026-08-26)
+RTMB:       1.9 kaskr/RTMB aea9b2d — sdreport_xtra fix made 2026-08-30
+TMB:        1.9.25 kaskr/adcomp @ 9ce0af2, 2026-08-26
 unmarked:   1.5.1
 R2jags:     0.8.9
 rjags:      4.17

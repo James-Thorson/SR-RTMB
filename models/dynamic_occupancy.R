@@ -36,6 +36,9 @@ n.chains <- 4
 n.iter <- 5000
 n.burnin <- 2500
 n.thin <- 1
+# TRUE = use the old map()-off-Z==1 workaround;
+# FALSE = rely on RTMB's posfun fix (kaskr/RTMB@aea9b2d)
+MAP <- FALSE
 
 # JAGS model as a string - written to a temp file at runtime
 jags_model_dynocc <- "
@@ -212,16 +215,21 @@ fit_all_dynocc <- function(seed, M, T, nrep, psi_true, omega_true,
     jnll
   }
 
+  # shuts off estimation for sites known to have Z = 1
+  map <- if (MAP) {
+    list(Z = factor(ifelse(
+      apply(y, MARGIN = 1:2, FUN = \(x) any(x == 1)), NA, seq_len(prod(dim(y)))
+    )))
+  } else {
+    NULL
+  }
+
   time_rtmb <- system.time({
     obj <- tryCatch(
       MakeADFun(
         f, par,
         random = "Z",
-        map = list(Z = factor(ifelse(
-          apply(y, MARGIN = 1:2, FUN = \(x) any(x == 1)),
-          NA,
-          seq_len(prod(dim(y)))
-        ))),
+        map = map,
         integrate = list(Z = TMB::SR(0:1, discrete = TRUE))
       ),
       error = function(e) NULL
