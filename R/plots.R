@@ -16,7 +16,9 @@ models <- list(
     times = list(rtmb = res_occ$times$rtmb, unm = res_occ$times$unm, jags = res_occ$times$jags),
     truth = res_occ$truth,
     nsim = res_occ$nsim,
-    jags_conv_rate = res_occ$jags_conv_rate
+    jags_conv_rate = res_occ$jags_conv_rate,
+    rtmb_conv_rate = res_occ$rtmb_conv_rate,
+    unm_conv_rate = res_occ$unm_conv_rate
   ),
   "Dynamic Occupancy" = list(
     kind = "wide",
@@ -24,7 +26,9 @@ models <- list(
     times = list(rtmb = res_dynocc$times$rtmb, unm = res_dynocc$times$unm, jags = res_dynocc$times$jags),
     truth = res_dynocc$truth,
     nsim = res_dynocc$nsim,
-    jags_conv_rate = res_dynocc$jags_conv_rate
+    jags_conv_rate = res_dynocc$jags_conv_rate,
+    rtmb_conv_rate = res_dynocc$rtmb_conv_rate,
+    unm_conv_rate = res_dynocc$unm_conv_rate
   ),
   "N-mixture" = list(
     kind = "wide",
@@ -32,7 +36,9 @@ models <- list(
     times = list(rtmb = res_nmix$times$rtmb, unm = res_nmix$times$unm, jags = res_nmix$times$jags),
     truth = res_nmix$truth,
     nsim = res_nmix$nsim,
-    jags_conv_rate = res_nmix$jags_conv_rate
+    jags_conv_rate = res_nmix$jags_conv_rate,
+    rtmb_conv_rate = res_nmix$rtmb_conv_rate,
+    unm_conv_rate = res_nmix$unm_conv_rate
   ),
   "Open N-mixture" = list(
     kind = "split",
@@ -40,18 +46,17 @@ models <- list(
     times = list(rtmb = res_om$rtmb_times_per_sim, unm = res_om$unm_times_per_sim, jags = res_om$jags_times_per_sim),
     truth = res_om$truth,
     nsim = res_om$nsim,
-    jags_conv_rate = res_om$jags_conv_rate
+    jags_conv_rate = res_om$jags_conv_rate,
+    rtmb_conv_rate = res_om$rtmb_conv_rate,
+    unm_conv_rate = res_om$unm_conv_rate
   )
 )
 
 timing <- build_timing_table(models)
 cat("=== Timing Summary ===\n")
 print(timing, row.names = FALSE)
-cat("\n=== JAGS Convergence Rates (Rhat < 1.1) ===\n")
-cat("Occupancy:         ", round(res_occ$jags_conv_rate, 3), "\n")
-cat("Dynamic Occupancy: ", round(res_dynocc$jags_conv_rate, 3), "\n")
-cat("N-mixture:         ", round(res_nmix$jags_conv_rate, 3), "\n")
-cat("Open N-mixture:    ", round(res_om$jags_conv_rate, 3), "\n")
+cat("\n=== Convergence per Model and Framework ===\n")
+print(build_convergence_table(models), row.names = FALSE)
 
 timings_long <- write_timing_csv(models, "results/timings.csv")
 plot_timing_violin(timings_long, "figures/timing_violin.png")

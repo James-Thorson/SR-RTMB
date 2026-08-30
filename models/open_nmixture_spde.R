@@ -49,6 +49,7 @@ res <- matrix(NA_real_,
   dimnames = list(NULL, names(truth))
 )
 converged <- rep(FALSE, nsim)
+hess_ok <- rep(NA, nsim)
 elapsed_sec <- rep(NA, nsim)
 last_fit <- NULL # for plotting the fields
 
@@ -162,6 +163,9 @@ for (s in 1:nsim) {
   if (is.null(opt) || opt$convergence != 0) next
   converged[s] <- TRUE
 
+  sdr <- tryCatch(sdreport(obj), error = function(e) NULL)
+  hess_ok[s] <- !is.null(sdr) && sdr$pdHess
+
   res[s, "mu_lambda"] <- opt$par["mu_lambda"]
   res[s, "gamma"] <- exp(opt$par["log_gamma"])
   res[s, "omega"] <- plogis(opt$par["logit_omega"])
@@ -183,15 +187,23 @@ for (param in names(truth)) {
   results[[paste0(param, "_true")]] <- truth[[param]]
 }
 results$converged <- converged
+results$hess_ok <- hess_ok
 results$elapsed_sec <- elapsed_sec
 
-saveRDS(results, "results/open_nmixture_spde_sim.rds")
-# results <- readRDS("results/open_nmixture_spde_sim.rds")
+rtmb_conv_rate <- mean(hess_ok, na.rm = TRUE)
+
+saveRDS(
+  list(results = results, rtmb_conv_rate = rtmb_conv_rate),
+  "results/open_nmixture_spde_sim.rds"
+)
+# readRDS("results/open_nmixture_spde_sim.rds")$results
 
 print(results, digits = 3, row.names = FALSE)
 cat(sum(converged), "of", nsim, "replicates converged\n")
+cat(sum(hess_ok, na.rm = TRUE), "of", nsim, "replicates had invertible Hessian\n")
+cat("RTMB Hessian convergence rate:", round(rtmb_conv_rate, 3), "\n")
 
-results <- results[results$converged, ]
+results <- results[results$converged & results$hess_ok, ]
 
 # -------------------------------------------------------------
 # plot: estimated vs true spatial field (last converged replicate)

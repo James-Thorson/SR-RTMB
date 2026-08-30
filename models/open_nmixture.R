@@ -42,7 +42,7 @@ n.iter <- 20000
 n.burnin <- 10000
 n.thin <- 1
 
-# JAGS model 
+# JAGS model
 jags_model_dm <- "
 model {
   # Priors
@@ -86,12 +86,18 @@ fit_unm <- function(y) {
   K <- max(y) * 2
   umf <- unmarkedFramePCO(y = y, numPrimary = ncol(y))
   fit <- tryCatch(
-    suppressWarnings(pcountOpen(~1, ~1, ~1, ~1, data = umf, K = K, se = FALSE)),
+    suppressWarnings(pcountOpen(~1, ~1, ~1, ~1, data = umf, K = K, se = TRUE)),
     error = function(e) NULL
   )
   if (is.null(fit)) {
-    return(c(lambda = NA, gamma = NA, omega = NA, p = NA))
+    return(list(estimate = c(
+      lambda = NA, gamma = NA,
+      omega = NA, p = NA
+    ), converged = NA))
   }
+
+  se_unm <- tryCatch(SE(fit), error = function(e) NULL)
+  converged <- fit@opt$convergence == 0 && !is.null(se_unm) && all(is.finite(se_unm))
 
   result <- c(
     exp(coef(fit, "lambda")),
@@ -100,7 +106,7 @@ fit_unm <- function(y) {
     plogis(coef(fit, "det"))
   )
   names(result) <- c("lambda", "gamma", "omega", "p")
-  result
+  list(estimate = result, converged = converged)
 }
 
 fit_jags_dm <- function(y, n.chains, n.iter, n.burnin, n.thin,
@@ -232,16 +238,27 @@ fit_rtmb <- function(y) {
     error = function(e) NULL
   )
   if (is.null(obj)) {
-    return(c(lambda = NA, gamma = NA, omega = NA, p = NA))
+    return(list(estimate = c(
+      lambda = NA, gamma = NA,
+      omega = NA, p = NA
+    ), converged = NA))
   }
 
   opt <- tryCatch(
-    nlminb(obj$par, obj$fn, obj$gr, control = list(iter.max = 1e5, eval.max = 1e5)),
+    nlminb(obj$par, obj$fn, obj$gr,
+      control = list(iter.max = 1e5, eval.max = 1e5)
+    ),
     error = function(e) NULL
   )
   if (is.null(opt) || opt$convergence != 0) {
-    return(c(lambda = NA, gamma = NA, omega = NA, p = NA))
+    return(list(estimate = c(
+      lambda = NA,
+      gamma = NA, omega = NA, p = NA
+    ), converged = NA))
   }
+
+  sdr <- tryCatch(sdreport(obj), error = function(e) NULL)
+  rtmb_converged <- !is.null(sdr) && sdr$pdHess
 
   result <- c(
     exp(opt$par["log_lambda"]),
@@ -250,7 +267,7 @@ fit_rtmb <- function(y) {
     plogis(opt$par["logit_p"])
   )
   names(result) <- c("lambda", "gamma", "omega", "p")
-  result
+  list(estimate = result, converged = rtmb_converged)
 }
 
 run_dailmadsen <- function(nsim, M, T,
@@ -269,10 +286,18 @@ run_dailmadsen <- function(nsim, M, T,
     y <- datasets[[i]]
     t <- system.time({
       out <- tryCatch(fit_unm(y),
-        error = function(e) c(lambda = NA, gamma = NA, omega = NA, p = NA)
+        error = function(e) {
+          list(estimate = c(
+            lambda = NA,
+            gamma = NA, omega = NA, p = NA
+          ), converged = NA)
+        }
       )
     })
-    unm_raw[[i]] <- list(estimate = out, time = t["elapsed"])
+    unm_raw[[i]] <- list(
+      estimate = out$estimate,
+      unm_converged = out$converged, time = t["elapsed"]
+    )
   }
 
   jags_raw <- vector("list", nsim)
@@ -299,10 +324,18 @@ run_dailmadsen <- function(nsim, M, T,
     y <- datasets[[i]]
     t <- system.time({
       out <- tryCatch(fit_rtmb(y),
-        error = function(e) c(lambda = NA, gamma = NA, omega = NA, p = NA)
+        error = function(e) {
+          list(estimate = c(
+            lambda = NA,
+            gamma = NA, omega = NA, p = NA
+          ), converged = NA)
+        }
       )
     })
-    rtmb_raw[[i]] <- list(estimate = out, time = t["elapsed"])
+    rtmb_raw[[i]] <- list(
+      estimate = out$estimate,
+      rtmb_converged = out$converged, time = t["elapsed"]
+    )
   }
 
   res_unm <- as.data.frame(do.call(rbind, lapply(unm_raw, function(x) x$estimate)))
@@ -318,29 +351,44 @@ run_dailmadsen <- function(nsim, M, T,
   jags_times <- sapply(jags_raw, function(x) x$time_jags)
   rtmb_times <- sapply(rtmb_raw, function(x) x$time)
 
+  jags_conv <- sapply(jags_raw, function(x) x$jags_converged)
+  rtmb_conv <- sapply(rtmb_raw, function(x) x$rtmb_converged)
+  unm_conv <- sapply(unm_raw, function(x) x$unm_converged)
+
   # Drop the same simulation indices from all three frameworks so estimates
-  # always correspond to the same dataset - critical for fair comparison
-  ok <- complete.cases(res_rtmb) & complete.cases(res_unm) & complete.cases(res_jags)
+  # always correspond to the same dataset for fair comparison. JAGS
+  # convergence is not required: this model is hard enough for JAGS that
+  # requiring Rhat < 1.1 leaves too few replicates
+  ok <- complete.cases(res_rtmb) & complete.cases(res_unm) & complete.cases(res_jags) &
+    rtmb_conv %in% TRUE & unm_conv %in% TRUE
   res_rtmb <- res_rtmb[ok, ]
   res_unm <- res_unm[ok, ]
   res_jags <- res_jags[ok, ]
 
-  conv_rate <- mean(sapply(jags_raw, function(x) x$jags_converged), na.rm = TRUE)
+  conv_rate <- mean(jags_conv, na.rm = TRUE)
+  rtmb_conv_rate <- mean(rtmb_conv, na.rm = TRUE)
+  unm_conv_rate <- mean(unm_conv, na.rm = TRUE)
 
   list(
     model = "dailmadsen",
     estimates_unm = res_unm,
     estimates_jags = res_jags,
     estimates_rtmb = res_rtmb,
+    convergence = data.frame(
+      sim = seq_len(nsim),
+      jags = jags_conv, rtmb = rtmb_conv, unm = unm_conv
+    ),
     times = data.frame(
       rtmb = sum(rtmb_times, na.rm = TRUE),
       unm  = sum(unm_times, na.rm = TRUE),
       jags = sum(jags_times, na.rm = TRUE)
     ),
-    unm_times_per_sim = unm_times,
-    jags_times_per_sim = jags_times,
-    rtmb_times_per_sim = rtmb_times,
+    unm_times_per_sim = unm_times[ok],
+    jags_times_per_sim = jags_times[ok],
+    rtmb_times_per_sim = rtmb_times[ok],
     jags_conv_rate = conv_rate,
+    rtmb_conv_rate = rtmb_conv_rate,
+    unm_conv_rate = unm_conv_rate,
     truth = c(
       lambda = lambda_true, gamma = gamma_true,
       omega = omega_true, p = p_true
@@ -362,3 +410,5 @@ cat("Total RTMB time:", res$times$rtmb, "s\n")
 cat("Total unmarked time:", res$times$unm, "s\n")
 cat("Total JAGS time:", res$times$jags, "s\n")
 cat("JAGS convergence rate:", round(res$jags_conv_rate, 3), "\n")
+cat("RTMB Hessian convergence rate:", round(res$rtmb_conv_rate, 3), "\n")
+cat("unmarked Hessian convergence rate:", round(res$unm_conv_rate, 3), "\n")

@@ -18,6 +18,8 @@ framework_colors <- c(RTMB = "#8E44AD", unmarked = "#2C3E50", JAGS = "#E67E22")
 #   truth          - named truth vector
 #   nsim           - replicates requested (before any dropped for NAs)
 #   jags_conv_rate - fraction of replicates with JAGS Rhat < 1.1
+#   rtmb_conv_rate - fraction of replicates with an invertible RTMB Hessian
+#   unm_conv_rate  - fraction of replicates with an invertible unmarked Hessian
 # -----------------------------------------------------------
 
 # -----------------------------------------------------------
@@ -35,6 +37,20 @@ build_timing_table <- function(models) {
   timing$speedup_vs_unm <- round(timing$unmarked_mean_s / timing$RTMB_mean_s, 1)
   timing$speedup_vs_jags <- round(timing$JAGS_mean_s / timing$RTMB_mean_s, 1)
   timing
+}
+
+# -----------------------------------------------------------
+# Convergence summary table (fraction converged, by model x framework)
+# -----------------------------------------------------------
+
+build_convergence_table <- function(models) {
+  data.frame(
+    Model = names(models),
+    RTMB_conv_rate = round(sapply(models, function(m) m$rtmb_conv_rate), 3),
+    unmarked_conv_rate = round(sapply(models, function(m) m$unm_conv_rate), 3),
+    JAGS_conv_rate = round(sapply(models, function(m) m$jags_conv_rate), 3),
+    row.names = NULL
+  )
 }
 
 # -----------------------------------------------------------

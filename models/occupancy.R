@@ -83,9 +83,12 @@ fit_all_occ <- function(seed, R, T, psi_true, p_true,
         psi_jags = NA, p_jags = NA
       ),
       time_rtmb = NA, time_unm = NA, time_jags = NA,
-      jags_converged = NA
+      jags_converged = NA, rtmb_converged = NA, unm_converged = NA
     ))
   }
+
+  se_unm <- tryCatch(SE(fit_unm), error = function(e) NULL)
+  unm_converged <- fit_unm@opt$convergence == 0 && !is.null(se_unm) && all(is.finite(se_unm))
 
   # ------------------------------------------------------------------
   # JAGS - same dataset, explicit latent z_i sampled by MCMC
@@ -179,9 +182,12 @@ fit_all_occ <- function(seed, R, T, psi_true, p_true,
         psi_jags = NA, p_jags = NA
       ),
       time_rtmb = NA, time_unm = NA, time_jags = NA,
-      jags_converged = NA
+      jags_converged = NA, rtmb_converged = NA, unm_converged = NA
     ))
   }
+
+  sdr <- tryCatch(sdreport(obj), error = function(e) NULL)
+  rtmb_converged <- !is.null(sdr) && sdr$pdHess
 
   list(
     estimates = c(
@@ -195,7 +201,9 @@ fit_all_occ <- function(seed, R, T, psi_true, p_true,
     time_rtmb = time_rtmb["elapsed"],
     time_unm = time_unm["elapsed"],
     time_jags = time_jags["elapsed"],
-    jags_converged = jags_converged
+    jags_converged = jags_converged,
+    rtmb_converged = rtmb_converged,
+    unm_converged = unm_converged
   )
 }
 
@@ -219,19 +227,31 @@ run_occupancy <- function(nsim, R, T,
     jags = sapply(raw, function(x) x$time_jags)
   )
 
-  # Keep only sims where all three frameworks succeeded
-  ok <- complete.cases(estimates_all) & complete.cases(times_all)
+  jags_conv <- sapply(raw, function(x) x$jags_converged)
+  rtmb_conv <- sapply(raw, function(x) x$rtmb_converged)
+  unm_conv <- sapply(raw, function(x) x$unm_converged)
+
+  # Keep only sims where all three frameworks succeeded and converged
+  ok <- complete.cases(estimates_all) & complete.cases(times_all) &
+    jags_conv %in% TRUE & rtmb_conv %in% TRUE & unm_conv %in% TRUE
   estimates <- as.data.frame(estimates_all[ok, , drop = FALSE])
   times <- times_all[ok, ]
 
-  conv_rate <- mean(sapply(raw, function(x) x$jags_converged), na.rm = TRUE)
+  conv_rate <- mean(jags_conv, na.rm = TRUE)
+  rtmb_conv_rate <- mean(rtmb_conv, na.rm = TRUE)
+  unm_conv_rate <- mean(unm_conv, na.rm = TRUE)
 
   list(
     model = "occupancy",
     estimates = estimates,
     times = times,
+    convergence = data.frame(
+      sim = seq_len(nsim), jags = jags_conv, rtmb = rtmb_conv, unm = unm_conv
+    ),
     truth = c(psi = psi_true, p = p_true),
     jags_conv_rate = conv_rate,
+    rtmb_conv_rate = rtmb_conv_rate,
+    unm_conv_rate = unm_conv_rate,
     nsim = nsim, R = R, T = T
   )
 }
@@ -248,3 +268,5 @@ cat("Mean RTMB time:", round(mean(res$times$rtmb, na.rm = TRUE), 3), "s\n")
 cat("Mean unmarked time:", round(mean(res$times$unm, na.rm = TRUE), 3), "s\n")
 cat("Mean JAGS time:", round(mean(res$times$jags, na.rm = TRUE), 3), "s\n")
 cat("JAGS convergence rate:", round(res$jags_conv_rate, 3), "\n")
+cat("RTMB Hessian convergence rate:", round(res$rtmb_conv_rate, 3), "\n")
+cat("unmarked Hessian convergence rate:", round(res$unm_conv_rate, 3), "\n")
