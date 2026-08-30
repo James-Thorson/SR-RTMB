@@ -20,10 +20,14 @@ library(fmesher)
 library(ggplot2)
 library(patchwork)
 
-set.seed(54321)
+# run parameters
+# set by `make NSIM=X`; set nsim manually here instead if running standalone
+nsim <- as.integer(Sys.getenv("NSIM"))
+# set by `make SEED=X`; set seed manually here instead if running standalone
+seed <- as.integer(Sys.getenv("SEED"))
+set.seed(seed)
 M <- 200
 T <- 4
-nsim <- 100
 
 # true parameters
 mu_lambda_true <- log(2.5)
@@ -45,7 +49,13 @@ res <- matrix(NA_real_,
   dimnames = list(NULL, names(truth))
 )
 converged <- rep(FALSE, nsim)
-elapsed_sec <- rep(NA_real_, nsim)
+elapsed_sec <- rep(NA, nsim)
+# Snapshot of the fields the post-loop spatial-field plot needs, taken from
+# whichever replicate last converged - NOT whatever the loop variables
+# happen to hold when it ends, since the final replicate can still fail to
+# fit (MakeADFun error or non-convergence) and leave A_is/mesh mismatched
+# with obj/epsilon_i from an earlier replicate.
+last_fit <- NULL
 
 for (s in 1:nsim) {
   cat("replicate", s, "of", nsim, "\n")
@@ -53,8 +63,14 @@ for (s in 1:nsim) {
   # -------------------------------------------------------------
   # simulate: new site locations, mesh, and spatial field each rep
   # -------------------------------------------------------------
-  coords <- matrix(runif(M * 2), ncol = 2, dimnames = list(NULL, c("x", "y")))
-  mesh <- fm_mesh_2d(coords, cutoff = 0.05, refine = list(max.edge = c(0.1, 0.3)))
+  coords <- matrix(runif(M * 2),
+    ncol = 2,
+    dimnames = list(NULL, c("x", "y"))
+  )
+  mesh <- fm_mesh_2d(coords,
+    cutoff = 0.05,
+    refine = list(max.edge = c(0.1, 0.3))
+  )
   spde <- fm_fem(mesh, order = 2)
   A_is <- fm_evaluator(mesh, loc = coords)$proj$A
 
@@ -75,9 +91,9 @@ for (s in 1:nsim) {
   }
   y <- matrix(rbinom(M * T, N, p_true), M, T)
   K <- max(y) * 3
-  
+
   # leave Jim's control look in here for now...
-  # if (K > 30) { 
+  # if (K > 30) {
   #   warning("replicate ", s, ": K = ", K, " too large, skipping")
   #   next
   # }
@@ -141,7 +157,9 @@ for (s in 1:nsim) {
   if (is.null(obj)) next
 
   opt <- tryCatch(
-    nlminb(obj$par, obj$fn, obj$gr, control = list(eval.max = 1e4, iter.max = 1e4)),
+    nlminb(obj$par, obj$fn, obj$gr,
+      control = list(eval.max = 1e4, iter.max = 1e4)
+    ),
     error = function(e) NULL
   )
 
@@ -155,6 +173,11 @@ for (s in 1:nsim) {
   res[s, "p"] <- plogis(opt$par["logit_p"])
   res[s, "ln_tau"] <- opt$par["ln_tau"]
   res[s, "ln_kappa"] <- opt$par["ln_kappa"]
+
+  last_fit <- list(
+    obj = obj, A_is = A_is, mesh = mesh,
+    coords = coords, epsilon_i = epsilon_i
+  )
 }
 
 # -------------------------------------------------------------
@@ -176,16 +199,22 @@ cat(sum(converged), "of", nsim, "replicates converged\n")
 results <- results[results$converged, ]
 
 # -------------------------------------------------------------
-# plot: estimated vs true spatial field (final replicate)
+# plot: estimated vs true spatial field (last converged replicate)
 # -------------------------------------------------------------
 
-epsilon_est_sites <- as.numeric(A_is %*% obj$env$parList()$epsilon_s)
-lim <- max(abs(c(epsilon_i, epsilon_est_sites)))
-mesh_sfc <- fm_as_sfc(mesh)
+epsilon_est_sites <- as.numeric(last_fit$A_is %*% last_fit$obj$env$parList()$epsilon_s)
+lim <- max(abs(c(last_fit$epsilon_i, epsilon_est_sites)))
+mesh_sfc <- fm_as_sfc(last_fit$mesh)
 
 field_dat <- rbind(
-  data.frame(x = coords[, "x"], y = coords[, "y"], omega = epsilon_i, panel = "true"),
-  data.frame(x = coords[, "x"], y = coords[, "y"], omega = epsilon_est_sites, panel = "estimated")
+  data.frame(
+    x = last_fit$coords[, "x"], y = last_fit$coords[, "y"],
+    omega = last_fit$epsilon_i, panel = "true"
+  ),
+  data.frame(
+    x = last_fit$coords[, "x"], y = last_fit$coords[, "y"],
+    omega = epsilon_est_sites, panel = "estimated"
+  )
 )
 
 plot_field <- function(df, title) {
@@ -211,11 +240,16 @@ plot_field <- function(df, title) {
     theme(panel.grid.minor = element_blank())
 }
 
-fig_field <- plot_field(field_dat[field_dat$panel == "true", ], expression(omega[i] ~ "true")) +
-  plot_field(field_dat[field_dat$panel == "estimated", ], expression(omega[i] ~ "estimated")) +
+fig_field <- plot_field(
+  field_dat[field_dat$panel == "true", ],
+  expression(omega[i] ~ "true")
+) +
+  plot_field(
+    field_dat[field_dat$panel == "estimated", ],
+    expression(omega[i] ~ "estimated")
+  ) +
   plot_layout(guides = "collect")
 
-fig_field
 
 # -------------------------------------------------------------
 # violin plot: relative bias of estimates vs. truth, by parameter
@@ -229,31 +263,36 @@ relbias_long <- do.call(rbind, lapply(names(truth), function(param) {
       results[[paste0(param, "_true")]]
   )
 }))
-relbias_long$parameter <- factor(relbias_long$parameter, levels = names(truth))
+# Ordering mirrors "Open N-mixture" in R/plotting.R::plot_estimate_recovery
+# (lambda, p, gamma, omega), with the spatial-field params new to this
+# script (ln_tau, ln_kappa) appended after.
+relbias_long$parameter <- factor(relbias_long$parameter,
+  levels = c("mu_lambda", "p", "gamma", "omega", "ln_tau", "ln_kappa")
+)
 
 fig_bias <- ggplot(relbias_long, aes(x = parameter, y = rel_bias)) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
   geom_violin(
-    fill = "#a6cee3", alpha = 0.85, linewidth = 0.3,
+    fill = "#8E44AD", alpha = 0.85, linewidth = 0.3,
     trim = FALSE, na.rm = TRUE
   ) +
   geom_boxplot(
     width = 0.12, outlier.shape = NA, fill = "white",
-    alpha = 0.6, na.rm = TRUE
+    alpha = 0.9, na.rm = TRUE
   ) +
   scale_x_discrete(labels = c(
-    mu_lambda = expression(mu[lambda]),
+    mu_lambda = expression(lambda),
+    p = expression(italic(p)),
     gamma = expression(gamma),
     omega = expression(omega),
-    p = expression(italic(p)),
-    ln_tau = expression(tau),
-    ln_kappa = expression(kappa)
+    # these are ln_tau/ln_kappa, not tau/kappa themselves
+    ln_tau = expression(log(tau)),
+    ln_kappa = expression(log(kappa))
   )) +
   labs(x = NULL, y = "Relative bias  (estimate - truth) / truth") +
   theme_minimal(base_size = 11) +
   theme(panel.grid.minor = element_blank())
 
-fig_bias
 
 # -------------------------------------------------------------
 # violin plot: per-fit run time
@@ -263,10 +302,10 @@ fig_time <- ggplot(results, aes(x = "", y = elapsed_sec, fill = "RTMB")) +
   geom_violin(alpha = 0.85, linewidth = 0.3, trim = FALSE, na.rm = TRUE) +
   geom_boxplot(
     width = 0.12, outlier.shape = NA, fill = "white",
-    alpha = 0.6, na.rm = TRUE
+    alpha = 0.9, na.rm = TRUE
   ) +
-  scale_fill_manual(values = c(RTMB = "#a6cee3"), name = NULL) +
-  scale_y_log10(labels = scales::label_log()) +
+  scale_fill_manual(values = c(RTMB = "#8E44AD"), name = NULL) +
+  scale_y_log10() +
   labs(x = NULL, y = "Time per fit (s, log scale)") +
   theme_minimal(base_size = 11) +
   theme(
@@ -275,7 +314,6 @@ fig_time <- ggplot(results, aes(x = "", y = elapsed_sec, fill = "RTMB")) +
     axis.ticks.x = element_blank()
   )
 
-fig_time
 
 # -------------------------------------------------------------
 # combined: truth vs. estimates | timing / field
@@ -284,7 +322,6 @@ fig_time
 fig_all <- fig_field / (fig_bias | fig_time) &
   theme(aspect.ratio = 1)
 
-print(fig_all)
 
 ggsave("figures/open_nmixture_spde.png",
   fig_all,

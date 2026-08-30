@@ -1,34 +1,36 @@
-# Shared plotting/timing helpers. Sourced by plots.R after results/*.rds
-# have been written by run_all.R.
+# Shared plotting/timing helpers. Sourced by R/plots.R after results/*.rds
+# have been written by the model scripts in models/.
 
 library(ggplot2)
 
-col_rtmb <- "#a6cee3"
-col_unm <- "#1f78b4"
-col_jags <- "#b2df8a"
+framework_colors <- c(RTMB = "#8E44AD", unmarked = "#2C3E50", JAGS = "#E67E22")
+
+# -----------------------------------------------------------
+# `models` is a named list, one entry per model, in the order they
+# should appear in tables/facets. Each entry has:
+#   kind           - "wide"  (one estimates data.frame, columns "<param>_<rtmb|unm|jags>",
+#                    like occupancy/n-mixture/dynamic-occupancy)
+#                  - "split" (list(rtmb=, unm=, jags=) of per-framework
+#                    data.frames, like open n-mixture / dail-madsen)
+#   estimates      - shaped per `kind`
+#   times          - list(rtmb = <vec>, unm = <vec>, jags = <vec>) of
+#                    per-replicate seconds, regardless of `kind`
+#   truth          - named truth vector
+#   nsim           - replicates requested (before any dropped for NAs)
+#   jags_conv_rate - fraction of replicates with JAGS Rhat < 1.1
+# -----------------------------------------------------------
 
 # -----------------------------------------------------------
 # Timing summary table (mean seconds per fit, by model x framework)
 # -----------------------------------------------------------
 
-build_timing_table <- function(res_occ, res_nmix, res_dm) {
+build_timing_table <- function(models) {
   timing <- data.frame(
-    Model = c("Occupancy", "N-mixture", "Dail-Madsen"),
-    RTMB_mean_s = round(c(
-      mean(res_occ$times$rtmb, na.rm = TRUE),
-      mean(res_nmix$times$rtmb, na.rm = TRUE),
-      mean(res_dm$rtmb_times_per_sim, na.rm = TRUE)
-    ), 3),
-    unmarked_mean_s = round(c(
-      mean(res_occ$times$unm, na.rm = TRUE),
-      mean(res_nmix$times$unm, na.rm = TRUE),
-      mean(res_dm$unm_times_per_sim, na.rm = TRUE)
-    ), 3),
-    JAGS_mean_s = round(c(
-      mean(res_occ$times$jags, na.rm = TRUE),
-      mean(res_nmix$times$jags, na.rm = TRUE),
-      mean(res_dm$jags_times_per_sim, na.rm = TRUE)
-    ), 3)
+    Model = names(models),
+    RTMB_mean_s = round(sapply(models, function(m) mean(m$times$rtmb, na.rm = TRUE)), 3),
+    unmarked_mean_s = round(sapply(models, function(m) mean(m$times$unm, na.rm = TRUE)), 3),
+    JAGS_mean_s = round(sapply(models, function(m) mean(m$times$jags, na.rm = TRUE)), 3),
+    row.names = NULL
   )
   timing$speedup_vs_unm <- round(timing$unmarked_mean_s / timing$RTMB_mean_s, 1)
   timing$speedup_vs_jags <- round(timing$JAGS_mean_s / timing$RTMB_mean_s, 1)
@@ -47,42 +49,39 @@ times_to_long <- function(times_wide, model) {
   )
 }
 
-write_timing_csv <- function(res_occ, res_nmix, res_dm, path = "results/timings.csv") {
-  dm_times <- data.frame(
-    rtmb = res_dm$rtmb_times_per_sim,
-    unm  = res_dm$unm_times_per_sim,
-    jags = res_dm$jags_times_per_sim
-  )
-  timings_long <- rbind(
-    times_to_long(res_occ$times, "Occupancy"),
-    times_to_long(res_nmix$times, "N-mixture"),
-    times_to_long(dm_times, "Dail-Madsen")
-  )
+build_timing_long <- function(models) {
+  do.call(rbind, lapply(names(models), function(name) {
+    times_to_long(as.data.frame(models[[name]]$times), name)
+  }))
+}
+
+write_timing_csv <- function(models, path = "results/timings.csv") {
+  timings_long <- build_timing_long(models)
   write.csv(timings_long, path, row.names = FALSE)
   cat("Per-sim timings saved to", path, "\n")
   timings_long
 }
 
-plot_timing_violin <- function(timings_long, path = "figures/timing_violin.png") {
+plot_timing_violin <- function(timings_long, path = "figures/timing_violin.png", title = NULL) {
   timings_long$framework <- factor(timings_long$framework, levels = c("RTMB", "unmarked", "JAGS"))
-  timings_long$model <- factor(timings_long$model, levels = c("Occupancy", "N-mixture", "Dail-Madsen"))
+  timings_long$model <- factor(timings_long$model, levels = unique(timings_long$model))
 
   fig <- ggplot(timings_long, aes(x = framework, y = seconds, fill = framework)) +
     geom_violin(trim = FALSE, alpha = 0.85, linewidth = 0.3) +
-    geom_boxplot(width = 0.12, outlier.shape = NA, fill = "white", alpha = 0.6) +
+    geom_boxplot(width = 0.12, outlier.shape = NA, fill = "white", alpha = 0.9) +
     scale_y_log10() +
     scale_fill_manual(
-      values = c(RTMB = col_rtmb, unmarked = col_unm, JAGS = col_jags),
+      values = framework_colors,
       guide = "none"
     ) +
-    facet_wrap(~model, scales = "free_y") +
+    facet_wrap(~model, nrow = 2, dir = "v", scales = "free_y") +
     labs(
-      x = NULL, y = "Time per fit (s, log scale)"
+      x = NULL, y = "Time per fit (s, log scale)", title = title
     ) +
     theme_minimal(base_size = 12) +
     theme(panel.grid.minor = element_blank())
 
-  ggsave(path, fig, width = 11, height = 5, dpi = 150)
+  ggsave(path, fig, width = 11, height = 7.5, dpi = 150)
   cat("Timing violin plot saved to", path, "\n")
 }
 
@@ -128,24 +127,69 @@ relbias_from_split <- function(estimates_by_framework, truth, model_name) {
   do.call(rbind, rows)
 }
 
-build_relbias_long <- function(res_occ, res_nmix, res_dm) {
-  occ <- relbias_from_wide(res_occ$estimates, res_occ$truth, "Occupancy")
-  nmix <- relbias_from_wide(res_nmix$estimates, res_nmix$truth, "N-mixture")
-  dm <- relbias_from_split(
-    list(rtmb = res_dm$estimates_rtmb, unm = res_dm$estimates_unm, jags = res_dm$estimates_jags),
-    res_dm$truth, "Dail-Madsen"
-  )
-  rbind(occ, nmix, dm)
+build_relbias_long <- function(models) {
+  do.call(rbind, lapply(names(models), function(name) {
+    m <- models[[name]]
+    if (m$kind == "wide") {
+      relbias_from_wide(m$estimates, m$truth, name)
+    } else {
+      relbias_from_split(m$estimates, m$truth, name)
+    }
+  }))
 }
 
-plot_estimate_recovery <- function(relbias_long, path = "figures/estimate_recovery.png") {
+plot_estimate_recovery <- function(relbias_long, path = "figures/estimate_recovery.png", title = NULL) {
   relbias_long$framework <- factor(relbias_long$framework, levels = c("RTMB", "unmarked", "JAGS"))
-  relbias_long$model <- factor(relbias_long$model, levels = c("Occupancy", "N-mixture", "Dail-Madsen"))
-  # "p" is shared by all three models but should sort last within each
-  # facet, so it goes last in the global level order too.
-  relbias_long$parameter <- factor(relbias_long$parameter, levels = c("psi", "lambda", "gamma", "omega", "p"))
 
-  fig <- ggplot(relbias_long, aes(x = parameter, y = rel_bias, fill = framework)) +
+  model_order <- unique(relbias_long$model)
+  relbias_long$model <- factor(relbias_long$model, levels = model_order)
+
+  # Panels fill column-by-column below (facet_wrap(dir = "v"), nrow =
+  # facet_nrow), so pair up models within the same column: the top model's
+  # parameter order (its own order of first appearance) is the reference,
+  # and the bottom model repeats its shared parameters in that same order
+  # before appending whatever parameters are new to it.
+  facet_nrow <- 2
+  natural_order <- function(model_name) {
+    unique(relbias_long$parameter[relbias_long$model == model_name])
+  }
+  param_order_by_model <- list()
+  for (i in seq_along(model_order)) {
+    m <- as.character(model_order[i])
+    if (i %% facet_nrow == 1) {
+      param_order_by_model[[m]] <- natural_order(m)
+    } else {
+      top_order <- param_order_by_model[[as.character(model_order[i - 1])]]
+      own_order <- natural_order(m)
+      param_order_by_model[[m]] <- c(intersect(top_order, own_order), setdiff(own_order, top_order))
+    }
+  }
+
+  sep <- "::"
+  panel_key_levels <- unlist(lapply(model_order, function(m) {
+    paste(m, param_order_by_model[[as.character(m)]], sep = sep)
+  }))
+  relbias_long$panel_key <- factor(
+    paste(relbias_long$model, relbias_long$parameter, sep = sep),
+    levels = panel_key_levels
+  )
+
+  param_expr <- c(psi = "psi", omega = "omega", lambda = "lambda", gamma = "gamma", p = "italic(p)")
+  key_params <- sub(paste0("^.*", sep), "", panel_key_levels)
+  key_label_lookup <- as.expression(lapply(param_expr[key_params], function(e) parse(text = e)[[1]]))
+  names(key_label_lookup) <- panel_key_levels
+  # facet_wrap(scales = "free") shows only the levels present in each panel,
+  # so labels must be looked up by name (not positionally) or they end up
+  # misaligned with what's actually displayed in that panel.
+  key_labels <- function(breaks) key_label_lookup[breaks]
+
+  # geom_boxplot's own dodge computation drops all but one dodge slot when
+  # every x level is shared across all fill groups (as it is here), so the
+  # group aesthetic must be set explicitly or most boxes silently vanish.
+  fig <- ggplot(relbias_long, aes(
+    x = panel_key, y = rel_bias, fill = framework,
+    group = interaction(panel_key, framework)
+  )) +
     geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
     geom_violin(
       position = position_dodge(width = 0.8), width = 0.75,
@@ -153,24 +197,50 @@ plot_estimate_recovery <- function(relbias_long, path = "figures/estimate_recove
     ) +
     geom_boxplot(
       position = position_dodge(width = 0.8), width = 0.12,
-      outlier.shape = NA, fill = "white", alpha = 0.6
+      outlier.shape = NA, fill = "white", alpha = 0.9
     ) +
     scale_fill_manual(
-      values = c(RTMB = col_rtmb, unmarked = col_unm, JAGS = col_jags),
+      values = framework_colors,
       name = NULL
     ) +
-    scale_x_discrete(labels = c(
-      psi = expression(psi),
-      lambda = expression(lambda),
-      gamma = expression(gamma),
-      omega = expression(omega),
-      p = expression(italic(p))
-    )) +
-    facet_wrap(~model, scales = "free") +
-    labs(x = NULL, y = "Relative bias  (estimate - truth) / truth") +
+    scale_x_discrete(labels = key_labels) +
+    facet_wrap(~model, nrow = facet_nrow, dir = "v", scales = "free") +
+    labs(x = NULL, y = "Relative bias  (estimate - truth) / truth", title = title) +
     theme_minimal(base_size = 12) +
     theme(panel.grid.minor = element_blank(), legend.position = "bottom")
 
-  ggsave(path, fig, width = 13, height = 6, dpi = 150)
+  ggsave(path, fig, width = 11, height = 8.5, dpi = 150)
   cat("Estimate recovery plot saved to", path, "\n")
+}
+
+# -----------------------------------------------------------
+# JAGS convergence, written into README.md as a plain-text block (not a
+# markdown table, so a linter can't reformat it) so it always reflects
+# results/*.rds instead of being hand-typed.
+# -----------------------------------------------------------
+
+update_readme_convergence_table <- function(models, path = "README.md") {
+  labels <- paste0(names(models), ":")
+  labels <- formatC(labels, width = -max(nchar(labels)))
+  lines <- sprintf(
+    "%s nsim=%d  Rhat<1.1=%d%%",
+    labels,
+    sapply(models, function(m) m$nsim),
+    round(100 * sapply(models, function(m) m$jags_conv_rate))
+  )
+  block <- paste(c("```", lines, "```"), collapse = "\n")
+
+  readme <- paste(readLines(path), collapse = "\n")
+  # Anchored on the block's own first content line (a fence alone would
+  # also match the closing fence of any earlier, unrelated code block).
+  # Fence lines may carry trailing whitespace after a markdown
+  # reformatter runs, so tolerate that on both fences.
+  pattern <- "(?sm)^```[ \t]*\\n(Occupancy|N-mixture|Dynamic Occupancy|Open N-mixture):.*?\\n```[ \t]*"
+  if (!grepl(pattern, readme, perl = TRUE)) {
+    stop("update_readme_convergence_table(): no matching block found in ", path,
+      " - regex is out of sync with the file, nothing was written")
+  }
+  readme <- sub(pattern, block, readme, perl = TRUE)
+  writeLines(readme, path)
+  cat("Convergence results updated in", path, "\n")
 }

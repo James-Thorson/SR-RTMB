@@ -1,26 +1,64 @@
 # plots.R
-# Loads results/*.rds (written by run_all.R) and generates all figures.
+# Loads results/*.rds (written by models/occupancy.R, dynamic_occupancy.R,
+# nmixture.R, open_nmixture.R) and generates all figures.
 # Usage: Rscript R/plots.R   or   make plots
 source("R/plotting.R")
 
-dir.create("figures", showWarnings = FALSE)
-
 res_occ <- readRDS("results/occupancy.rds")
+res_dynocc <- readRDS("results/dynamic_occupancy.rds")
 res_nmix <- readRDS("results/nmixture.rds")
-res_dm <- readRDS("results/dail_madsen.rds")
+res_om <- readRDS("results/open_nmixture.rds")
 
-timing <- build_timing_table(res_occ, res_nmix, res_dm)
+models <- list(
+  Occupancy = list(
+    kind = "wide",
+    estimates = res_occ$estimates,
+    times = list(rtmb = res_occ$times$rtmb, unm = res_occ$times$unm, jags = res_occ$times$jags),
+    truth = res_occ$truth,
+    nsim = res_occ$nsim,
+    jags_conv_rate = res_occ$jags_conv_rate
+  ),
+  "Dynamic Occupancy" = list(
+    kind = "wide",
+    estimates = res_dynocc$estimates,
+    times = list(rtmb = res_dynocc$times$rtmb, unm = res_dynocc$times$unm, jags = res_dynocc$times$jags),
+    truth = res_dynocc$truth,
+    nsim = res_dynocc$nsim,
+    jags_conv_rate = res_dynocc$jags_conv_rate
+  ),
+  "N-mixture" = list(
+    kind = "wide",
+    estimates = res_nmix$estimates,
+    times = list(rtmb = res_nmix$times$rtmb, unm = res_nmix$times$unm, jags = res_nmix$times$jags),
+    truth = res_nmix$truth,
+    nsim = res_nmix$nsim,
+    jags_conv_rate = res_nmix$jags_conv_rate
+  ),
+  "Open N-mixture" = list(
+    kind = "split",
+    estimates = list(rtmb = res_om$estimates_rtmb, unm = res_om$estimates_unm, jags = res_om$estimates_jags),
+    times = list(rtmb = res_om$rtmb_times_per_sim, unm = res_om$unm_times_per_sim, jags = res_om$jags_times_per_sim),
+    truth = res_om$truth,
+    nsim = res_om$nsim,
+    jags_conv_rate = res_om$jags_conv_rate
+  )
+)
+
+timing <- build_timing_table(models)
 cat("=== Timing Summary ===\n")
 print(timing, row.names = FALSE)
 cat("\n=== JAGS Convergence Rates (Rhat < 1.1) ===\n")
-cat("Occupancy:   ", round(res_occ$jags_conv_rate, 3), "\n")
-cat("N-mixture:   ", round(res_nmix$jags_conv_rate, 3), "\n")
-cat("Dail-Madsen: ", round(res_dm$jags_conv_rate, 3), "\n")
+cat("Occupancy:         ", round(res_occ$jags_conv_rate, 3), "\n")
+cat("Dynamic Occupancy: ", round(res_dynocc$jags_conv_rate, 3), "\n")
+cat("N-mixture:         ", round(res_nmix$jags_conv_rate, 3), "\n")
+cat("Open N-mixture:    ", round(res_om$jags_conv_rate, 3), "\n")
 
-timings_long <- write_timing_csv(res_occ, res_nmix, res_dm, "results/timings.csv")
+timings_long <- write_timing_csv(models, "results/timings.csv")
 plot_timing_violin(timings_long, "figures/timing_violin.png")
 
-relbias_long <- build_relbias_long(res_occ, res_nmix, res_dm)
+relbias_long <- build_relbias_long(models)
 plot_estimate_recovery(relbias_long, "figures/estimate_recovery.png")
+
+update_readme_convergence_table(models, "README.md")
 
 cat("\nAll figures saved to figures/\n")

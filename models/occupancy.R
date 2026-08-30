@@ -1,4 +1,4 @@
-# Occupancy Model (MacKenzie et al. 2002) - Monte Carlo Simulation
+# Occupancy Model (MacKenzie et al. 2002)
 #
 # Ecological process (latent occupancy):
 #   z_i ~ Bernoulli(psi),  i = 1, ..., R
@@ -20,7 +20,20 @@
 library(RTMB)
 library(unmarked)
 library(R2jags)
-source("R/utils.R")
+
+# run parameters
+# set by `make NSIM=X`; set nsim manually here instead if running standalone
+nsim <- as.integer(Sys.getenv("NSIM"))
+# set by `make SEED=X`; set seed manually here instead if running standalone
+seed <- as.integer(Sys.getenv("SEED"))
+R <- 200
+T <- 5
+psi_true <- 0.2
+p_true <- 0.5
+n.chains <- 4
+n.iter <- 5000
+n.burnin <- 2500
+n.thin <- 1
 
 # JAGS model as a string - written to a temp file at runtime
 jags_model_occ <- "
@@ -54,6 +67,81 @@ fit_all_occ <- function(seed, R, T, psi_true, p_true,
   set.seed(seed)
   dat <- sim_data_occ(R, T, psi_true, p_true)
   y <- dat$y
+
+  # ------------------------------------------------------------------
+  # unmarked
+  # ------------------------------------------------------------------
+  umf <- unmarkedFrameOccu(y = y)
+  time_unm <- system.time({
+    fit_unm <- tryCatch(
+      suppressWarnings(occu(~1 ~ 1, data = umf)),
+      error = function(e) NULL
+    )
+  })
+
+  if (is.null(fit_unm)) {
+    return(list(
+      estimates = c(
+        psi_rtmb = NA, p_rtmb = NA,
+        psi_unm = NA, p_unm = NA,
+        psi_jags = NA, p_jags = NA
+      ),
+      time_rtmb = NA, time_unm = NA, time_jags = NA,
+      jags_converged = NA
+    ))
+  }
+
+  # ------------------------------------------------------------------
+  # JAGS - same dataset, explicit latent z_i sampled by MCMC
+  # ------------------------------------------------------------------
+  model_file <- file.path(tempdir(), "jags_model_occ.txt")
+  writeLines(jags_model_occ, model_file)
+
+  jags_data <- list(y = y, R = R, T = T)
+  jags_inits <- function() {
+    list(
+      psi = runif(1, 0.1, 0.9),
+      p   = runif(1, 0.1, 0.9),
+      z   = apply(y, 1, max) # initialise z at observed max
+    )
+  }
+
+  # This is a timing comparison against RTMB/unmarked, so JAGS chains run
+  # in parallel (one per core) rather than sequentially.
+  jags.seed <- sample.int(1e6, 1)
+  time_jags <- system.time({
+    fit_jags <- tryCatch(
+      suppressWarnings(
+        jags.parallel(
+          data = jags_data,
+          inits = jags_inits,
+          parameters.to.save = c("psi", "p"),
+          model.file = model_file,
+          n.chains = n.chains,
+          n.cluster = n.chains,
+          n.iter = n.iter,
+          n.burnin = n.burnin,
+          n.thin = n.thin,
+          jags.seed = jags.seed,
+          envir = environment(),
+          export_obj_names = c("y", "n.chains", "n.iter", "n.burnin", "n.thin", "jags.seed")
+        )
+      ),
+      error = function(e) NULL
+    )
+  })
+  if (is.null(fit_jags)) {
+    jags_psi <- NA
+    jags_p <- NA
+    jags_converged <- NA
+  } else {
+    sums <- fit_jags$BUGSoutput$summary
+    jags_psi <- sums["psi", "mean"]
+    jags_p <- sums["p", "mean"]
+    # Rhat < 1.1 for all monitored params (excluding deviance)
+    rhats <- sums[rownames(sums) != "deviance", "Rhat"]
+    jags_converged <- all(rhats < 1.1, na.rm = TRUE)
+  }
 
   # ------------------------------------------------------------------
   # RTMB
@@ -98,75 +186,6 @@ fit_all_occ <- function(seed, R, T, psi_true, p_true,
     ))
   }
 
-  # ------------------------------------------------------------------
-  # unmarked
-  # ------------------------------------------------------------------
-  umf <- unmarkedFrameOccu(y = y)
-  time_unm <- system.time({
-    fit_unm <- tryCatch(
-      suppressWarnings(occu(~1 ~ 1, data = umf)),
-      error = function(e) NULL
-    )
-  })
-
-  if (is.null(fit_unm)) {
-    return(list(
-      estimates = c(
-        psi_rtmb = NA, p_rtmb = NA,
-        psi_unm = NA, p_unm = NA,
-        psi_jags = NA, p_jags = NA
-      ),
-      time_rtmb = NA, time_unm = NA, time_jags = NA,
-      jags_converged = NA
-    ))
-  }
-
-  # ------------------------------------------------------------------
-  # JAGS - same dataset, explicit latent z_i sampled by MCMC
-  # ------------------------------------------------------------------
-  model_file <- file.path(tempdir(), "jags_model_occ.txt")
-  writeLines(jags_model_occ, model_file)
-
-  jags_data <- list(y = y, R = R, T = T)
-  jags_inits <- function() {
-    list(
-      psi = runif(1, 0.1, 0.9),
-      p   = runif(1, 0.1, 0.9),
-      z   = apply(y, 1, max) # initialise z at observed max
-    )
-  }
-
-  time_jags <- system.time({
-    fit_jags <- tryCatch(
-      suppressWarnings(
-        jags(
-          data = jags_data,
-          inits = jags_inits,
-          parameters.to.save = c("psi", "p"),
-          model.file = model_file,
-          n.chains = n.chains,
-          n.iter = n.iter,
-          n.burnin = n.burnin,
-          n.thin = n.thin,
-          progress.bar = "none"
-        )
-      ),
-      error = function(e) NULL
-    )
-  })
-  if (is.null(fit_jags)) {
-    jags_psi <- NA
-    jags_p <- NA
-    jags_converged <- NA
-  } else {
-    sums <- fit_jags$BUGSoutput$summary
-    jags_psi <- sums["psi", "mean"]
-    jags_p <- sums["p", "mean"]
-    # Rhat < 1.1 for all monitored params (excluding deviance)
-    rhats <- sums[rownames(sums) != "deviance", "Rhat"]
-    jags_converged <- all(rhats < 1.1, na.rm = TRUE)
-  }
-
   list(
     estimates = c(
       psi_rtmb = unname(plogis(opt$par["logit_psi"])),
@@ -183,17 +202,18 @@ fit_all_occ <- function(seed, R, T, psi_true, p_true,
   )
 }
 
-run_occupancy <- function(nsim = 1, R = 200, T = 5,
-                          psi_true = 0.2, p_true = 0.5,
-                          seed = 1123, mc.cores = 1,
-                          n.chains = 3, n.iter = 5000,
-                          n.burnin = 2500, n.thin = 1) {
-  raw <- lapply_maybe(1:nsim, function(s) {
-    fit_all_occ(seed + s, R, T, psi_true, p_true,
+run_occupancy <- function(nsim, R, T,
+                          psi_true, p_true,
+                          seed,
+                          n.chains, n.iter,
+                          n.burnin, n.thin) {
+  raw <- vector("list", nsim)
+  for (s in 1:nsim) {
+    raw[[s]] <- fit_all_occ(seed + s, R, T, psi_true, p_true,
       n.chains = n.chains, n.iter = n.iter,
       n.burnin = n.burnin, n.thin = n.thin
     )
-  }, mc.cores = mc.cores)
+  }
 
   estimates_all <- do.call(rbind, lapply(raw, function(x) x$estimates))
   times_all <- data.frame(
@@ -219,13 +239,15 @@ run_occupancy <- function(nsim = 1, R = 200, T = 5,
   )
 }
 
-# Run standalone if called directly
-if (sys.nframe() == 0) {
-  res <- run_occupancy()
-  dir.create("results", showWarnings = FALSE)
-  saveRDS(res, "results/occupancy.rds")
-  cat("Mean RTMB time:", round(mean(res$times$rtmb, na.rm = TRUE), 3), "s\n")
-  cat("Mean unmarked time:", round(mean(res$times$unm, na.rm = TRUE), 3), "s\n")
-  cat("Mean JAGS time:", round(mean(res$times$jags, na.rm = TRUE), 3), "s\n")
-  cat("JAGS convergence rate:", round(res$jags_conv_rate, 3), "\n")
-}
+res <- run_occupancy(
+  nsim = nsim, R = R, T = T,
+  psi_true = psi_true, p_true = p_true,
+  seed = seed,
+  n.chains = n.chains, n.iter = n.iter,
+  n.burnin = n.burnin, n.thin = n.thin
+)
+saveRDS(res, "results/occupancy.rds")
+cat("Mean RTMB time:", round(mean(res$times$rtmb, na.rm = TRUE), 3), "s\n")
+cat("Mean unmarked time:", round(mean(res$times$unm, na.rm = TRUE), 3), "s\n")
+cat("Mean JAGS time:", round(mean(res$times$jags, na.rm = TRUE), 3), "s\n")
+cat("JAGS convergence rate:", round(res$jags_conv_rate, 3), "\n")

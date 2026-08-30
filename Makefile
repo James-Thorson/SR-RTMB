@@ -1,39 +1,41 @@
-.PHONY: all run parallel plots occupancy nmixture dailmadsen spde phylo install clean
+.PHONY: all clean install occupancy dynamic_occupancy nmixture open_nmixture spde phylo plots
 
-all: run
+# set global variables that can be passed into all simulation scripts
+NSIM ?= 100
+SEED ?= 11223344
+export NSIM SEED
 
-# run all models sequentially
-test:
-	Rscript R/run_all.R
+all: plots spde phylo
 
-# run all models in parallel (one sim per core)
-run:
-	Rscript R/run_all.R parallel
-
-# generate figures from results/*.rds (run after run/test)
-plots:
-	Rscript R/plots.R
-
-# run individual models
-occupancy:
-	Rscript models/occupancy.R
-
-nmixture:
-	Rscript models/nmixture.R
-
-dailmadsen:
-	Rscript models/dail_madsen.R
-
-spde:
-	Rscript models/dail_madsen_spde.R
-
-phylo:
-	Rscript models/phylogenetic_mixed_traits.R
-
-# install required R packages
+# make sure packages are installed
 install:
 	Rscript R/install.R
 
-# clean results
+# run the 2x2 occupancy style model simulations
+occupancy: install
+	Rscript models/occupancy.R
+
+dynamic_occupancy: install
+	Rscript models/dynamic_occupancy.R
+
+nmixture: install
+	Rscript models/nmixture.R
+
+open_nmixture: install
+	Rscript models/open_nmixture.R
+
+# run the open N-mixture SPDE simulation
+spde: install
+	Rscript models/open_nmixture_spde.R
+
+# run the phylogenetic mixed trait analysis
+phylo: install
+	Rscript models/phylogenetic_mixed_traits.R
+
+# make simulation plots
+plots: occupancy dynamic_occupancy nmixture open_nmixture
+	Rscript R/plots.R
+
 clean:
-	rm -f results/*.rds results/*.csv figures/*.png
+	# wipe results and plots
+	rm -f results/*.rds results/timings.csv figures/*.png

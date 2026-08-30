@@ -26,16 +26,27 @@
 #   L_i = sum_{N_i1} ... sum_{N_iT} sum_{S_i1} ... sum_{S_i,T-1}
 #           Poisson(N_i1|lambda) * prod_t Binomial(S_it|N_it,omega) *
 #           Poisson(N_it+1-S_it|gamma) * Binomial(y_it|N_it,p)
-#
-# JAGS fits the same model via MCMC, sampling N_it and S_it explicitly.
-# Note: JAGS cannot use SR - it samples the full latent state space
-# directly, which is substantially slower. This difference in wall-time is
-# part of the story this repository tells.
+
 
 library(RTMB)
 library(unmarked)
 library(R2jags)
-source("R/utils.R")
+
+# run parameters
+# set by `make NSIM=X`; set nsim manually here instead if running standalone
+nsim <- as.integer(Sys.getenv("NSIM"))
+# set by `make SEED=X`; set seed manually here instead if running standalone
+seed <- as.integer(Sys.getenv("SEED"))
+M <- 100
+T <- 5
+lambda_true <- 4
+gamma_true <- 1.5
+omega_true <- 0.8
+p_true <- 0.5
+n.chains <- 4
+n.iter <- 20000
+n.burnin <- 10000
+n.thin <- 1
 
 # JAGS model as a string - written to a temp file at runtime
 jags_model_dm <- "
@@ -75,73 +86,6 @@ sim_dm <- function(M, T, lambda, gamma, omega, p) {
     N[, t + 1] <- S + G
   }
   matrix(rbinom(M * T, N, p), M, T)
-}
-
-fit_rtmb <- function(y) {
-  M <- nrow(y)
-  T <- ncol(y)
-  K <- max(y) * 2
-  dat <- list(y = y, M = M, T = T)
-
-  f <- function(par) {
-    "[<-" <- ADoverload("[<-")
-    "c" <- ADoverload("c")
-    getAll(par, dat)
-    lambda <- exp(log_lambda)
-    gamma <- exp(log_gamma)
-    omega <- plogis(logit_omega)
-    p <- plogis(logit_p)
-
-    jnll <- -sum(dbinom(S, N[, 1:(T - 1)], omega, log = TRUE), na.rm = TRUE)
-    jnll <- jnll - sum(dpois(N[, 1], lambda, log = TRUE), na.rm = TRUE)
-    for (t in 1:(T - 1)) {
-      G <- N[, t + 1] - S[, t]
-      jnll <- jnll - sum(dpois(G, gamma, log = TRUE), na.rm = TRUE)
-    }
-    jnll <- jnll - sum(dbinom(y, size = N, prob = p, log = TRUE), na.rm = TRUE)
-    jnll
-  }
-
-  par <- list(
-    log_lambda  = log(mean(y[, 1]) + 0.1),
-    log_gamma   = log(1.5),
-    logit_omega = 0,
-    logit_p     = 0,
-    S = matrix(K, nrow = M, ncol = T - 1),
-    N = matrix(K, nrow = M, ncol = T)
-  )
-
-  obj <- tryCatch(
-    MakeADFun(f, par,
-      random = c("N", "S"),
-      integrate = list(
-        S = TMB::SR(0:K, discrete = TRUE),
-        N = TMB::SR(0:K, discrete = TRUE)
-      ),
-      silent = TRUE
-    ),
-    error = function(e) NULL
-  )
-  if (is.null(obj)) {
-    return(c(lambda = NA, gamma = NA, omega = NA, p = NA))
-  }
-
-  opt <- tryCatch(
-    nlminb(obj$par, obj$fn, obj$gr, control = list(iter.max = 1e5, eval.max = 1e5)),
-    error = function(e) NULL
-  )
-  if (is.null(opt) || opt$convergence != 0) {
-    return(c(lambda = NA, gamma = NA, omega = NA, p = NA))
-  }
-
-  result <- c(
-    exp(opt$par["log_lambda"]),
-    exp(opt$par["log_gamma"]),
-    plogis(opt$par["logit_omega"]),
-    plogis(opt$par["logit_p"])
-  )
-  names(result) <- c("lambda", "gamma", "omega", "p")
-  result
 }
 
 fit_unm <- function(y) {
@@ -198,18 +142,38 @@ fit_jags_dm <- function(y, n.chains, n.iter, n.burnin, n.thin,
     )
   }
 
+  # jags.parallel() defaults jags.seed to a hardcoded 123, which - unlike
+  # sequential jags() inheriting R's naturally-advancing RNG - makes every
+  # chain's starting values IDENTICAL across every replicate and every run,
+  # since seeds <- jags.seed + seq_len(n.chains) never changes. Draw a fresh
+  # one from R's already-seeded stream so inits actually vary per replicate.
+  jags.seed <- sample.int(1e6, 1)
+
+  # JAGS samples the full latent state explicitly here (no SR), making it
+  # the slowest fit in the pipeline - run its chains in parallel, one per
+  # core, instead of sequentially in a single process.
+  # jags.parallel() re-resolves these names on each worker (its internal
+  # .runjags() does eval(expression(n.iter)) etc., and inits() is called
+  # there too) rather than just inheriting fit_jags_dm's closure, so they
+  # all need to be listed explicitly here or the workers fail to find them.
   fit <- tryCatch(
     suppressWarnings(
-      jags(
+      jags.parallel(
         data = jags_data,
         inits = jags_inits,
         parameters.to.save = c("lambda", "gamma", "omega", "p"),
         model.file = model_file,
         n.chains = n.chains,
+        n.cluster = n.chains,
         n.iter = n.iter,
         n.burnin = n.burnin,
         n.thin = n.thin,
-        progress.bar = "none"
+        jags.seed = jags.seed,
+        envir = environment(),
+        export_obj_names = c(
+          "N1_init", "S_init", "G_init", "lambda_true",
+          "n.chains", "n.iter", "n.burnin", "n.thin", "jags.seed"
+        )
       )
     ),
     error = function(e) NULL
@@ -237,12 +201,77 @@ fit_jags_dm <- function(y, n.chains, n.iter, n.burnin, n.thin,
   )
 }
 
-run_dailmadsen <- function(nsim = 1, M = 100, T = 5,
-                           lambda_true = 4, gamma_true = 1.5,
-                           omega_true = 0.8, p_true = 0.5,
-                           seed = 333, mc.cores = 1,
-                           n.chains = 3, n.iter = 5000,
-                           n.burnin = 2500, n.thin = 1) {
+fit_rtmb <- function(y) {
+  M <- nrow(y)
+  T <- ncol(y)
+  K <- max(y) * 2
+  dat <- list(y = y, M = M, T = T)
+
+  f <- function(par) {
+    getAll(par, dat)
+    S <- SN[, seq_len(T - 1)]
+    N <- SN[, T - 1 + seq_len(T)]
+    lambda <- exp(log_lambda)
+    gamma <- exp(log_gamma)
+    omega <- plogis(logit_omega)
+    p <- plogis(logit_p)
+
+    jnll <- -sum(dbinom(S, N[, 1:(T - 1)], omega, log = TRUE), na.rm = TRUE)
+    jnll <- jnll - sum(dpois(N[, 1], lambda, log = TRUE), na.rm = TRUE)
+    for (t in 1:(T - 1)) {
+      G <- N[, t + 1] - S[, t]
+      jnll <- jnll - sum(dpois(G, gamma, log = TRUE), na.rm = TRUE)
+    }
+    jnll <- jnll - sum(dbinom(y, size = N, prob = p, log = TRUE), na.rm = TRUE)
+    jnll
+  }
+
+  par <- list(
+    log_lambda = log(mean(y[, 1]) + 0.1),
+    log_gamma = log(1.5),
+    logit_omega = 0,
+    logit_p = 0,
+    SN = matrix(K, nrow = M, ncol = 2 * T - 1)
+  )
+
+  obj <- tryCatch(
+    MakeADFun(f, par,
+      random = c("SN"),
+      integrate = list(
+        SN = TMB::SR(0:K, discrete = TRUE)
+      ),
+      silent = TRUE
+    ),
+    error = function(e) NULL
+  )
+  if (is.null(obj)) {
+    return(c(lambda = NA, gamma = NA, omega = NA, p = NA))
+  }
+
+  opt <- tryCatch(
+    nlminb(obj$par, obj$fn, obj$gr, control = list(iter.max = 1e5, eval.max = 1e5)),
+    error = function(e) NULL
+  )
+  if (is.null(opt) || opt$convergence != 0) {
+    return(c(lambda = NA, gamma = NA, omega = NA, p = NA))
+  }
+
+  result <- c(
+    exp(opt$par["log_lambda"]),
+    exp(opt$par["log_gamma"]),
+    plogis(opt$par["logit_omega"]),
+    plogis(opt$par["logit_p"])
+  )
+  names(result) <- c("lambda", "gamma", "omega", "p")
+  result
+}
+
+run_dailmadsen <- function(nsim, M, T,
+                           lambda_true, gamma_true,
+                           omega_true, p_true,
+                           seed,
+                           n.chains, n.iter,
+                           n.burnin, n.thin) {
   datasets <- lapply(1:nsim, function(s) {
     set.seed(seed + s)
     sim_dm(M, T, lambda_true, gamma_true, omega_true, p_true)
@@ -251,25 +280,20 @@ run_dailmadsen <- function(nsim = 1, M = 100, T = 5,
   # Each dataset timed individually for every framework, so per-sim times
   # are always available and mean times are true per-fit times rather than
   # wall-clock-divided-by-nsim.
-  rtmb_raw <- lapply_maybe(datasets, function(y) {
-    t <- system.time({
-      out <- tryCatch(fit_rtmb(y),
-        error = function(e) c(lambda = NA, gamma = NA, omega = NA, p = NA)
-      )
-    })
-    list(estimate = out, time = t["elapsed"])
-  }, mc.cores = mc.cores)
-
-  unm_raw <- lapply_maybe(datasets, function(y) {
+  unm_raw <- vector("list", nsim)
+  for (i in seq_along(datasets)) {
+    y <- datasets[[i]]
     t <- system.time({
       out <- tryCatch(fit_unm(y),
         error = function(e) c(lambda = NA, gamma = NA, omega = NA, p = NA)
       )
     })
-    list(estimate = out, time = t["elapsed"])
-  }, mc.cores = mc.cores)
+    unm_raw[[i]] <- list(estimate = out, time = t["elapsed"])
+  }
 
-  jags_raw <- lapply_maybe(datasets, function(y) {
+  jags_raw <- vector("list", nsim)
+  for (i in seq_along(datasets)) {
+    y <- datasets[[i]]
     t <- system.time({
       out <- fit_jags_dm(y,
         n.chains = n.chains,
@@ -279,25 +303,36 @@ run_dailmadsen <- function(nsim = 1, M = 100, T = 5,
         lambda_true = lambda_true
       )
     })
-    list(
+    jags_raw[[i]] <- list(
       estimates = out$estimates,
       jags_converged = out$jags_converged,
       time_jags = t["elapsed"]
     )
-  }, mc.cores = mc.cores)
+  }
 
-  res_rtmb <- as.data.frame(do.call(rbind, lapply(rtmb_raw, function(x) x$estimate)))
+  rtmb_raw <- vector("list", nsim)
+  for (i in seq_along(datasets)) {
+    y <- datasets[[i]]
+    t <- system.time({
+      out <- tryCatch(fit_rtmb(y),
+        error = function(e) c(lambda = NA, gamma = NA, omega = NA, p = NA)
+      )
+    })
+    rtmb_raw[[i]] <- list(estimate = out, time = t["elapsed"])
+  }
+
   res_unm <- as.data.frame(do.call(rbind, lapply(unm_raw, function(x) x$estimate)))
   res_jags <- as.data.frame(
     do.call(rbind, lapply(jags_raw, function(x) x$estimates))
   )
-  names(res_rtmb) <- c("lambda", "gamma", "omega", "p")
+  res_rtmb <- as.data.frame(do.call(rbind, lapply(rtmb_raw, function(x) x$estimate)))
   names(res_unm) <- c("lambda", "gamma", "omega", "p")
   names(res_jags) <- c("lambda", "gamma", "omega", "p")
+  names(res_rtmb) <- c("lambda", "gamma", "omega", "p")
 
-  rtmb_times <- sapply(rtmb_raw, function(x) x$time)
   unm_times <- sapply(unm_raw, function(x) x$time)
   jags_times <- sapply(jags_raw, function(x) x$time_jags)
+  rtmb_times <- sapply(rtmb_raw, function(x) x$time)
 
   # Drop the same simulation indices from all three frameworks so estimates
   # always correspond to the same dataset - critical for fair comparison
@@ -310,17 +345,17 @@ run_dailmadsen <- function(nsim = 1, M = 100, T = 5,
 
   list(
     model = "dailmadsen",
-    estimates_rtmb = res_rtmb,
     estimates_unm = res_unm,
     estimates_jags = res_jags,
+    estimates_rtmb = res_rtmb,
     times = data.frame(
       rtmb = sum(rtmb_times, na.rm = TRUE),
       unm  = sum(unm_times, na.rm = TRUE),
       jags = sum(jags_times, na.rm = TRUE)
     ),
-    rtmb_times_per_sim = rtmb_times,
     unm_times_per_sim = unm_times,
     jags_times_per_sim = jags_times,
+    rtmb_times_per_sim = rtmb_times,
     jags_conv_rate = conv_rate,
     truth = c(
       lambda = lambda_true, gamma = gamma_true,
@@ -330,13 +365,16 @@ run_dailmadsen <- function(nsim = 1, M = 100, T = 5,
   )
 }
 
-# Run standalone if called directly
-if (sys.nframe() == 0) {
-  res <- run_dailmadsen()
-  dir.create("results", showWarnings = FALSE)
-  saveRDS(res, "results/dail_madsen.rds")
-  cat("Total RTMB time:", res$times$rtmb, "s\n")
-  cat("Total unmarked time:", res$times$unm, "s\n")
-  cat("Total JAGS time:", res$times$jags, "s\n")
-  cat("JAGS convergence rate:", round(res$jags_conv_rate, 3), "\n")
-}
+res <- run_dailmadsen(
+  nsim = nsim, M = M, T = T,
+  lambda_true = lambda_true, gamma_true = gamma_true,
+  omega_true = omega_true, p_true = p_true,
+  seed = seed,
+  n.chains = n.chains, n.iter = n.iter,
+  n.burnin = n.burnin, n.thin = n.thin
+)
+saveRDS(res, "results/open_nmixture.rds")
+cat("Total RTMB time:", res$times$rtmb, "s\n")
+cat("Total unmarked time:", res$times$unm, "s\n")
+cat("Total JAGS time:", res$times$jags, "s\n")
+cat("JAGS convergence rate:", round(res$jags_conv_rate, 3), "\n")

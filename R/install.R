@@ -10,10 +10,11 @@
 
 pkgs <- c(
   "RTMB", # automatic differentiation + sequential reduction (SR)
-  "unmarked", # MLE benchmark for occupancy, N-mixture, Dail-Madsen
+  "unmarked", # MLE benchmark for occupancy, N-mixture, open N-mixture
   "R2jags", # JAGS interface (requires system JAGS)
-  "fmesher", # SPDE mesh construction for spatial Dail-Madsen
-  "parallel",
+  "fmesher", # SPDE mesh construction for the spatial open N-mixture model
+  "sf", # spatial field plotting for the SPDE model
+  "scales", # log-scale axis labels on the timing plot
   "ggplot2", # timing violin plot and SPDE field plot
   "patchwork", # combining ggplot2 panels
   "ape", # phylogenetic tree I/O for trait imputation
