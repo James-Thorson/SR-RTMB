@@ -1,6 +1,6 @@
-# Discrete Latent Variable Models in RTMB
+# Sequential Reduction for Discrete-Valued Latent Variables in RTMB
 
-Occupancy, N-mixture, and open-population models like Dail-Madsen require integrating over discrete latent states. This repo implements them in RTMB using Sequential Reduction (SR) to automatically marginalize those states, and compares parameter recovery and runtime against `unmarked` and `JAGS`.
+Occupancy and abundance (e.g., N-mixture) models, including their dynamic versions that are open to demographic changes, require integrating over discrete latent states. Discrete-valued latent variables also arise in other evolutionary models, e.g., state-switching for species traits in phylogenetic trait imputation.  This repo implements them in RTMB using Sequential Reduction (SR) to automatically marginalize those states, and compares parameter recovery and runtime against `unmarked` and `JAGS`.
 
 ## Quick start
 
