@@ -1,11 +1,11 @@
-.PHONY: all clean install occupancy dynamic_occupancy nmixture open_nmixture spde phylo plots
+.PHONY: all clean install occupancy dynamic_occupancy nmixture open_nmixture spde phylo plots sequential_reduction
 
 # set global variables that can be passed into all simulation scripts
 NSIM ?= 100
 SEED ?= 11223344
 export NSIM SEED
 
-all: plots spde phylo
+all: plots spde phylo sequential_reduction
 
 # make sure packages are installed
 install:
@@ -35,6 +35,10 @@ phylo: install
 # make simulation plots
 plots: occupancy dynamic_occupancy nmixture open_nmixture
 	Rscript R/plots.R
+
+# Figure 1: sequential reduction explainer (base R, no package dependencies)
+sequential_reduction:
+	Rscript R/sequential_reduction.R
 
 clean:
 	# wipe results and plots
