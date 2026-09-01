@@ -151,7 +151,9 @@ get_jnll(phat, what = "all")$Q
 
 
 # Make tree
-p <- ggtree(tree, layout = "circular") +
+plot_tree <- tree
+plot_tree$tip.label <- sub("^Liolaemus_", "L. ", plot_tree$tip.label)
+p <- ggtree(plot_tree, layout = "circular") +
   geom_tiplab2(size = 2.5, offset = 2)
 
 # Get coordinates of ALL nodes
@@ -241,5 +243,5 @@ p1 <- p +
 ggsave(
   plot = p1,
   filename = file.path(results_dir, "trait_imputation.png"),
-  height = 8, width = 6
+  height = 9, width = 8.5
 )
