@@ -13,6 +13,20 @@
 # epsilon_s is continuous, integrated out via RTMB's Laplace approximation;
 # N_jt and S_jt are discrete, marginalized jointly via Sequential Reduction
 # (SR) over {0, ..., K}
+#
+# where:
+#   mu_lambda = mean log initial abundance
+#   gamma     = recruitment rate (births and immigration)
+#   omega     = apparent survival probability
+#   p         = detection probability
+#   tau, kappa = SPDE precision and range parameters for the GMRF
+#   N_jt      = true (latent) abundance at site j, time t
+#   S_jt      = survivors at site j from time t to t+1
+#   G_jt      = recruits at site j from time t to t+1
+#   y_jt      = count at site j, time t
+#   epsilon_s = spatial random effect at mesh vertex s
+#
+# note: no sample index i - one count per site per time (no secondary samples)
 #-------------------
 
 library(RTMB)
