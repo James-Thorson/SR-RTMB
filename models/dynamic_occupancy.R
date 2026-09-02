@@ -5,7 +5,7 @@
 #   Z_i,t+1   ~ Bernoulli(Z_it * omega + (1 - Z_it) * lambda),  t = 1, ..., T - 1
 #
 # Observation process:
-#   y_itj | Z_it ~ Bernoulli(Z_it * p),  j = 1, ..., nrep
+#   y_itj | Z_it ~ Bernoulli(Z_it * p),  j = 1, ..., J
 #
 # where:
 #   psi    = initial occupancy probability
@@ -13,8 +13,10 @@
 #   lambda = colonization probability
 #   p      = detection probability
 #   Z_it   = true (latent) occupancy at site i, season t
-#   y_itj  = detection/non-detection at site i, season t, occasion j
+#   y_itj  = detection/non-detection at site i, season t, sample j
 #
+# note: this model flips the general convention (site = J, sample = I) -
+# here site = I, sample = J, time = T
 
 library(RTMB)
 library(unmarked)
@@ -25,9 +27,9 @@ library(R2jags)
 nsim <- as.integer(Sys.getenv("NSIM"))
 # set by `make SEED=X`; set seed manually here instead if running standalone
 seed <- as.integer(Sys.getenv("SEED"))
-M <- 200
+I <- 200
 T <- 4
-nrep <- 4
+J <- 4
 psi_true <- 0.6
 omega_true <- 0.8
 lambda_true <- 0.2
@@ -50,14 +52,14 @@ model {
   p      ~ dunif(0, 1)
 
   # Likelihood
-  for (i in 1:M) {
+  for (i in 1:I) {
     z[i, 1] ~ dbern(psi)
     for (t in 1:(T - 1)) {
       psi_t[i, t] <- z[i, t] * omega + (1 - z[i, t]) * lambda
       z[i, t + 1] ~ dbern(psi_t[i, t])
     }
     for (t in 1:T) {
-      for (j in 1:nrep) {
+      for (j in 1:J) {
         y[i, t, j] ~ dbern(z[i, t] * p)
       }
     }
@@ -65,23 +67,23 @@ model {
 }
 "
 
-sim_data_dynocc <- function(M, T, nrep, psi, omega, lambda, p) {
-  Z <- matrix(NA, M, T)
-  Z[, 1] <- rbinom(M, 1, psi)
+sim_data_dynocc <- function(I, T, J, psi, omega, lambda, p) {
+  Z <- matrix(NA, I, T)
+  Z[, 1] <- rbinom(I, 1, psi)
   for (t in 1:(T - 1)) {
     survived <- Z[, t] * omega
     psi_t <- survived + (1 - survived) * lambda
-    Z[, t + 1] <- rbinom(M, 1, psi_t)
+    Z[, t + 1] <- rbinom(I, 1, psi_t)
   }
 
-  y <- array(NA, dim = c(M, T, nrep))
+  y <- array(NA, dim = c(I, T, J))
   for (t in 1:T) {
     p_detect <- p * Z[, t]
-    for (i in 1:nrep) {
-      y[, t, i] <- rbinom(M, 1, p_detect)
+    for (j in 1:J) {
+      y[, t, j] <- rbinom(I, 1, p_detect)
     }
   }
-  list(y = y, M = M, T = T, nrep = nrep)
+  list(y = y, I = I, T = T, J = J)
 }
 
 na_estimates_dynocc <- function() {
@@ -92,14 +94,14 @@ na_estimates_dynocc <- function() {
   )
 }
 
-fit_all_dynocc <- function(seed, M, T, nrep, psi_true, omega_true,
+fit_all_dynocc <- function(seed, I, T, J, psi_true, omega_true,
                            lambda_true, p_true,
                            n.chains = 3, n.iter = 5000,
                            n.burnin = 2500, n.thin = 1) {
   gc() # get rid of residual JAGS misery
   set.seed(seed)
   dat_sim <- sim_data_dynocc(
-    M, T, nrep, psi_true,
+    I, T, J, psi_true,
     omega_true, lambda_true, p_true
   )
   y <- dat_sim$y
@@ -108,7 +110,7 @@ fit_all_dynocc <- function(seed, M, T, nrep, psi_true, omega_true,
   # unmarked - colext() is the dynamic/multi-season occupancy model:
   # col = colonization (lambda), ext = extinction (1 - omega)
   # ------------------------------------------------------------------
-  y_wide <- matrix(aperm(y, c(1, 3, 2)), nrow = M) # season-major: M x (nrep * T)
+  y_wide <- matrix(aperm(y, c(1, 3, 2)), nrow = I) # season-major: I x (J * T)
   umf <- unmarkedMultFrame(y = y_wide, numPrimary = T)
   time_unm <- system.time({
     fit_unm <- tryCatch(
@@ -135,7 +137,7 @@ fit_all_dynocc <- function(seed, M, T, nrep, psi_true, omega_true,
   model_file <- file.path(tempdir(), "jags_model_dynocc.txt")
   writeLines(jags_model_dynocc, model_file)
 
-  jags_data <- list(y = y, M = M, T = T, nrep = nrep)
+  jags_data <- list(y = y, I = I, T = T, J = J)
   jags_inits <- function() {
     list(
       psi    = runif(1, 0.1, 0.9),
@@ -188,14 +190,14 @@ fit_all_dynocc <- function(seed, M, T, nrep, psi_true, omega_true,
   # ------------------------------------------------------------------
   # RTMB
   # ------------------------------------------------------------------
-  dat <- list(y = y, M = M, T = T)
+  dat <- list(y = y, I = I, T = T)
 
   par <- list(
     logit_psi = 0,
     logit_omega = 0,
     logit_lambda = 0,
     logit_p = 0,
-    Z = matrix(1, nrow = M, ncol = T)
+    Z = matrix(1, nrow = I, ncol = T)
   )
 
   f <- function(par) {
@@ -279,7 +281,7 @@ fit_all_dynocc <- function(seed, M, T, nrep, psi_true, omega_true,
   )
 }
 
-run_dynamic_occupancy <- function(nsim, M, T, nrep,
+run_dynamic_occupancy <- function(nsim, I, T, J,
                                   psi_true, omega_true,
                                   lambda_true, p_true,
                                   seed,
@@ -287,7 +289,7 @@ run_dynamic_occupancy <- function(nsim, M, T, nrep,
                                   n.burnin, n.thin) {
   raw <- vector("list", nsim)
   for (s in 1:nsim) {
-    raw[[s]] <- fit_all_dynocc(seed + s, M, T, nrep, psi_true,
+    raw[[s]] <- fit_all_dynocc(seed + s, I, T, J, psi_true,
       omega_true, lambda_true, p_true,
       n.chains = n.chains, n.iter = n.iter,
       n.burnin = n.burnin, n.thin = n.thin
@@ -330,12 +332,12 @@ run_dynamic_occupancy <- function(nsim, M, T, nrep,
     jags_conv_rate = conv_rate,
     rtmb_conv_rate = rtmb_conv_rate,
     unm_conv_rate = unm_conv_rate,
-    nsim = nsim, M = M, T = T, nrep = nrep
+    nsim = nsim, I = I, T = T, J = J
   )
 }
 
 res <- run_dynamic_occupancy(
-  nsim = nsim, M = M, T = T, nrep = nrep,
+  nsim = nsim, I = I, T = T, J = J,
   psi_true = psi_true, omega_true = omega_true,
   lambda_true = lambda_true, p_true = p_true,
   seed = seed,

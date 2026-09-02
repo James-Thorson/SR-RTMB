@@ -1,25 +1,25 @@
 # Dail-Madsen Model (Dail & Madsen 2011) - Open Population N-mixture
 #
 # Ecological process (initial abundance):
-#   N_i1 ~ Poisson(lambda),  i = 1, ..., M
+#   N_j1 ~ Poisson(lambda),  j = 1, ..., J
 #
 # Population dynamics (survival and recruitment):
-#   S_it | N_it ~ Binomial(N_it, omega),  t = 1, ..., T-1
-#   G_it ~ Poisson(gamma)
-#   N_it+1 = S_it + G_it
+#   S_jt | N_jt ~ Binomial(N_jt, omega),  t = 1, ..., T-1
+#   G_jt ~ Poisson(gamma)
+#   N_j,t+1 = S_jt + G_jt
 #
 # Observation process (detection):
-#   y_it | N_it ~ Binomial(N_it, p),  t = 1, ..., T
+#   y_jt | N_jt ~ Binomial(N_jt, p),  t = 1, ..., T
 #
 # where:
 #   lambda = expected initial abundance at each site
 #   omega  = apparent survival probability
 #   gamma  = recruitment rate (births and immigration, constant across sites)
 #   p      = detection probability
-#   N_it   = true (latent) abundance at site i, time t
-#   S_it   = survivors at site i from time t to t+1
-#   G_it   = recruits at site i from time t to t+1
-#   y_it   = count at site i, time t
+#   N_jt   = true (latent) abundance at site j, time t
+#   S_jt   = survivors at site j from time t to t+1
+#   G_jt   = recruits at site j from time t to t+1
+#   y_jt   = count at site j, time t
 #
 
 library(RTMB)
@@ -31,7 +31,7 @@ library(R2jags)
 nsim <- as.integer(Sys.getenv("NSIM"))
 # set by `make SEED=X`; set seed manually here instead if running standalone
 seed <- as.integer(Sys.getenv("SEED"))
-M <- 100
+J <- 100
 T <- 5
 lambda_true <- 4
 gamma_true <- 1.5
@@ -52,34 +52,34 @@ model {
   p      ~ dunif(0, 1)
 
   # Likelihood
-  for (i in 1:M) {
+  for (j in 1:J) {
     # Initial abundance
-    N[i, 1] ~ dpois(lambda)
-    y[i, 1] ~ dbin(p, N[i, 1])
+    N[j, 1] ~ dpois(lambda)
+    y[j, 1] ~ dbin(p, N[j, 1])
 
     for (t in 2:T) {
       # Survivors from t-1 to t
-      S[i, t] ~ dbin(omega, N[i, t-1])
+      S[j, t] ~ dbin(omega, N[j, t-1])
       # Recruits at t
-      G[i, t] ~ dpois(gamma)
+      G[j, t] ~ dpois(gamma)
       # Total abundance at t
-      N[i, t] <- S[i, t] + G[i, t]
+      N[j, t] <- S[j, t] + G[j, t]
       # Observation
-      y[i, t] ~ dbin(p, N[i, t])
+      y[j, t] ~ dbin(p, N[j, t])
     }
   }
 }
 "
 
-sim_dm <- function(M, T, lambda, gamma, omega, p) {
-  N <- matrix(NA, M, T)
-  N[, 1] <- rpois(M, lambda)
+sim_dm <- function(J, T, lambda, gamma, omega, p) {
+  N <- matrix(NA, J, T)
+  N[, 1] <- rpois(J, lambda)
   for (t in 1:(T - 1)) {
-    S <- rbinom(M, N[, t], omega)
-    G <- rpois(M, gamma)
+    S <- rbinom(J, N[, t], omega)
+    G <- rpois(J, gamma)
     N[, t + 1] <- S + G
   }
-  matrix(rbinom(M * T, N, p), M, T)
+  matrix(rbinom(J * T, N, p), J, T)
 }
 
 fit_unm <- function(y) {
@@ -111,17 +111,17 @@ fit_unm <- function(y) {
 
 fit_jags_dm <- function(y, n.chains, n.iter, n.burnin, n.thin,
                         lambda_true) {
-  M <- nrow(y)
+  J <- nrow(y)
   T <- ncol(y)
 
   model_file <- file.path(tempdir(), "jags_model_dm.txt")
   writeLines(jags_model_dm, model_file)
 
-  # N[i,t] for t>=2 is a deterministic node (N <- S+G), cannot be initialised.
-  # Only stochastic nodes need inits: N[i,1], S[i,t>=2], G[i,t>=2].
+  # N[j,t] for t>=2 is a deterministic node (N <- S+G), cannot be initialised.
+  # Only stochastic nodes need inits: N[j,1], S[j,t>=2], G[j,t>=2].
   N1_init <- pmax(apply(y, 1, max) + 2L, y[, 1] + 1L)
-  S_init <- matrix(NA_integer_, M, T)
-  G_init <- matrix(NA_integer_, M, T)
+  S_init <- matrix(NA_integer_, J, T)
+  G_init <- matrix(NA_integer_, J, T)
   N_prev <- N1_init
   for (t in 2:T) {
     S_init[, t] <- pmin(N_prev, round(N_prev * 0.8))
@@ -129,14 +129,14 @@ fit_jags_dm <- function(y, n.chains, n.iter, n.burnin, n.thin,
     N_prev <- S_init[, t] + G_init[, t]
   }
 
-  jags_data <- list(y = y, M = M, T = T)
+  jags_data <- list(y = y, J = J, T = T)
   jags_inits <- function() {
     list(
       lambda = runif(1, 1, lambda_true * 2),
       gamma  = runif(1, 0.5, 3),
       omega  = runif(1, 0.5, 0.99),
       p      = runif(1, 0.1, 0.9),
-      N      = cbind(N1_init, matrix(NA_integer_, M, T - 1)),
+      N      = cbind(N1_init, matrix(NA_integer_, J, T - 1)),
       S      = S_init,
       G      = G_init
     )
@@ -195,10 +195,10 @@ fit_jags_dm <- function(y, n.chains, n.iter, n.burnin, n.thin,
 }
 
 fit_rtmb <- function(y) {
-  M <- nrow(y)
+  J <- nrow(y)
   T <- ncol(y)
   K <- max(y) * 2
-  dat <- list(y = y, M = M, T = T)
+  dat <- list(y = y, J = J, T = T)
 
   f <- function(par) {
     getAll(par, dat)
@@ -224,7 +224,7 @@ fit_rtmb <- function(y) {
     log_gamma = log(1.5),
     logit_omega = 0,
     logit_p = 0,
-    SN = matrix(K, nrow = M, ncol = 2 * T - 1)
+    SN = matrix(K, nrow = J, ncol = 2 * T - 1)
   )
 
   obj <- tryCatch(
@@ -270,7 +270,7 @@ fit_rtmb <- function(y) {
   list(estimate = result, converged = rtmb_converged)
 }
 
-run_dailmadsen <- function(nsim, M, T,
+run_dailmadsen <- function(nsim, J, T,
                            lambda_true, gamma_true,
                            omega_true, p_true,
                            seed,
@@ -278,7 +278,7 @@ run_dailmadsen <- function(nsim, M, T,
                            n.burnin, n.thin) {
   datasets <- lapply(1:nsim, function(s) {
     set.seed(seed + s)
-    sim_dm(M, T, lambda_true, gamma_true, omega_true, p_true)
+    sim_dm(J, T, lambda_true, gamma_true, omega_true, p_true)
   })
 
   unm_raw <- vector("list", nsim)
@@ -393,12 +393,12 @@ run_dailmadsen <- function(nsim, M, T,
       lambda = lambda_true, gamma = gamma_true,
       omega = omega_true, p = p_true
     ),
-    nsim = nsim, M = M, T = T
+    nsim = nsim, J = J, T = T
   )
 }
 
 res <- run_dailmadsen(
-  nsim = nsim, M = M, T = T,
+  nsim = nsim, J = J, T = T,
   lambda_true = lambda_true, gamma_true = gamma_true,
   omega_true = omega_true, p_true = p_true,
   seed = seed,

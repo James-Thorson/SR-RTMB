@@ -3,15 +3,15 @@
 # via SPDE, self-test
 # -------------------
 #
-# N_i1 ~ Poisson(lambda_i),  log(lambda_i) = mu_lambda + epsilon_i
-# S_it ~ Binomial(N_it, omega)
-# G_it ~ Poisson(gamma)
-# N_i,t+1 = S_it + G_it
-# y_it ~ Binomial(N_it, p)
+# N_j1 ~ Poisson(lambda_j),  log(lambda_j) = mu_lambda + epsilon_j
+# S_jt ~ Binomial(N_jt, omega)
+# G_jt ~ Poisson(gamma)
+# N_j,t+1 = S_jt + G_jt
+# y_jt ~ Binomial(N_jt, p)
 # epsilon_s ~ GMRF(0, Q / tau^2)
 #
 # epsilon_s is continuous, integrated out via RTMB's Laplace approximation;
-# N_it and S_it are discrete, marginalized jointly via Sequential Reduction
+# N_jt and S_jt are discrete, marginalized jointly via Sequential Reduction
 # (SR) over {0, ..., K}
 #-------------------
 
@@ -26,7 +26,7 @@ nsim <- as.integer(Sys.getenv("NSIM"))
 # set by `make SEED=X`; set seed manually here instead if running standalone
 seed <- as.integer(Sys.getenv("SEED"))
 set.seed(seed)
-M <- 200
+J <- 200
 T <- 4
 
 # true parameters
@@ -59,7 +59,7 @@ for (s in 1:nsim) {
   # -------------------------------------------------------------
   # simulate: new site locations, mesh, and spatial field each rep
   # -------------------------------------------------------------
-  coords <- matrix(runif(M * 2),
+  coords <- matrix(runif(J * 2),
     ncol = 2,
     dimnames = list(NULL, c("x", "y"))
   )
@@ -68,7 +68,7 @@ for (s in 1:nsim) {
     refine = list(max.edge = c(0.1, 0.3))
   )
   spde <- fm_fem(mesh, order = 2)
-  A_is <- fm_evaluator(mesh, loc = coords)$proj$A
+  A_js <- fm_evaluator(mesh, loc = coords)$proj$A
 
   Q_sim <- exp(4 * ln_kappa_true) * spde$c0 +
     2 * exp(2 * ln_kappa_true) * spde$g1 +
@@ -76,16 +76,16 @@ for (s in 1:nsim) {
 
   L <- chol(as.matrix(Q_sim))
   epsilon_v <- backsolve(L, rnorm(mesh$n)) / exp(ln_tau_true)
-  epsilon_i <- as.numeric(A_is %*% epsilon_v)
-  lambda_i <- exp(mu_lambda_true + epsilon_i)
-  gamma_i <- gamma_true * exp(epsilon_i)
+  epsilon_j <- as.numeric(A_js %*% epsilon_v)
+  lambda_j <- exp(mu_lambda_true + epsilon_j)
+  gamma_j <- gamma_true * exp(epsilon_j)
 
-  N <- matrix(NA, M, T)
-  N[, 1] <- rpois(M, lambda_i)
+  N <- matrix(NA, J, T)
+  N[, 1] <- rpois(J, lambda_j)
   for (t in 1:(T - 1)) {
-    N[, t + 1] <- rbinom(M, N[, t], omega_true) + rpois(M, gamma_i)
+    N[, t + 1] <- rbinom(J, N[, t], omega_true) + rpois(J, gamma_j)
   }
-  y <- matrix(rbinom(M * T, N, p_true), M, T)
+  y <- matrix(rbinom(J * T, N, p_true), J, T)
   K <- max(y) * 3
 
   # leave Jim's control look in here for now...
@@ -98,8 +98,8 @@ for (s in 1:nsim) {
   # fit
   # -------------------------------------------------------------
   dat <- list(
-    y = y, M = M, T = T,
-    A_is = A_is, M0 = spde$c0, M1 = spde$g1, M2 = spde$g2
+    y = y, J = J, T = T,
+    A_js = A_js, M0 = spde$c0, M1 = spde$g1, M2 = spde$g2
   )
 
   par <- list(
@@ -110,7 +110,7 @@ for (s in 1:nsim) {
     ln_tau = log(1),
     ln_kappa = log(1),
     epsilon_s = rep(0, mesh$n),
-    SN = matrix(K, nrow = M, ncol = 2 * T - 1)
+    SN = matrix(K, nrow = J, ncol = 2 * T - 1)
   )
 
   f <- function(par) {
@@ -126,13 +126,13 @@ for (s in 1:nsim) {
       mu = 0, Q = Q, log = TRUE,
       scale = 1 / exp(ln_tau)
     )
-    lambda_i <- exp(mu_lambda + (A_is %*% epsilon_s)[, 1])
-    gamma_i <- gamma * exp(A_is %*% epsilon_s)[, 1]
+    lambda_j <- exp(mu_lambda + (A_js %*% epsilon_s)[, 1])
+    gamma_j <- gamma * exp(A_js %*% epsilon_s)[, 1]
     jnll <- jnll - sum(dbinom(S, N[, 1:(T - 1)], omega, log = TRUE), na.rm = TRUE)
-    jnll <- jnll - sum(dpois(N[, 1], lambda_i, log = TRUE), na.rm = TRUE)
+    jnll <- jnll - sum(dpois(N[, 1], lambda_j, log = TRUE), na.rm = TRUE)
     for (t in 1:(T - 1)) {
       G <- N[, t + 1] - S[, t]
-      jnll <- jnll - sum(dpois(G, gamma_i, log = TRUE), na.rm = TRUE)
+      jnll <- jnll - sum(dpois(G, gamma_j, log = TRUE), na.rm = TRUE)
     }
     jnll <- jnll - sum(dbinom(y, size = N, prob = p, log = TRUE), na.rm = TRUE)
     jnll
@@ -174,8 +174,8 @@ for (s in 1:nsim) {
   res[s, "ln_kappa"] <- opt$par["ln_kappa"]
 
   last_fit <- list(
-    obj = obj, A_is = A_is, mesh = mesh,
-    coords = coords, epsilon_i = epsilon_i
+    obj = obj, A_js = A_js, mesh = mesh,
+    coords = coords, epsilon_j = epsilon_j
   )
 }
 
@@ -209,14 +209,14 @@ results <- results[results$converged & results$hess_ok, ]
 # plot: estimated vs true spatial field (last converged replicate)
 # -------------------------------------------------------------
 
-epsilon_est_sites <- as.numeric(last_fit$A_is %*% last_fit$obj$env$parList()$epsilon_s)
-lim <- max(abs(c(last_fit$epsilon_i, epsilon_est_sites)))
+epsilon_est_sites <- as.numeric(last_fit$A_js %*% last_fit$obj$env$parList()$epsilon_s)
+lim <- max(abs(c(last_fit$epsilon_j, epsilon_est_sites)))
 mesh_sfc <- fm_as_sfc(last_fit$mesh)
 
 field_dat <- rbind(
   data.frame(
     x = last_fit$coords[, "x"], y = last_fit$coords[, "y"],
-    omega = last_fit$epsilon_i, panel = "true"
+    omega = last_fit$epsilon_j, panel = "true"
   ),
   data.frame(
     x = last_fit$coords[, "x"], y = last_fit$coords[, "y"],

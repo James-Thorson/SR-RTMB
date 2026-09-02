@@ -1,16 +1,16 @@
 # Occupancy Model (MacKenzie et al. 2002)
 #
 # Ecological process (latent occupancy):
-#   z_i ~ Bernoulli(psi),  i = 1, ..., R
+#   z_j ~ Bernoulli(psi),  j = 1, ..., J
 #
 # Observation process:
-#   y_ij | z_i ~ Bernoulli(z_i * p),  j = 1, ..., T
+#   y_ji | z_j ~ Bernoulli(z_j * p),  i = 1, ..., I
 #
 # where:
 #   psi  = occupancy probability
 #   p    = detection probability
-#   z_i  = true (latent) occupancy at site i
-#   y_ij = detection/non-detection at site i, occasion j
+#   z_j  = true (latent) occupancy at site j
+#   y_ji = detection/non-detection at site j, sample i
 #
 
 library(RTMB)
@@ -22,8 +22,8 @@ library(R2jags)
 nsim <- as.integer(Sys.getenv("NSIM"))
 # set by `make SEED=X`; set seed manually here instead if running standalone
 seed <- as.integer(Sys.getenv("SEED"))
-R <- 200
-T <- 5
+J <- 200
+I <- 5
 psi_true <- 0.2
 p_true <- 0.5
 n.chains <- 4
@@ -39,10 +39,10 @@ model {
   p   ~ dunif(0, 1)
 
   # Likelihood
-  for (i in 1:R) {
-    z[i] ~ dbern(psi)
-    for (j in 1:T) {
-      y[i, j] ~ dbern(z[i] * p)
+  for (j in 1:J) {
+    z[j] ~ dbern(psi)
+    for (i in 1:I) {
+      y[j, i] ~ dbern(z[j] * p)
     }
   }
 
@@ -51,17 +51,17 @@ model {
 }
 "
 
-sim_data_occ <- function(R, T, psi, p) {
-  z_true <- rbinom(R, 1, psi)
-  y <- matrix(rbinom(R * T, 1, z_true * p), R, T)
-  list(y = y, R = R, T = T)
+sim_data_occ <- function(J, I, psi, p) {
+  z_true <- rbinom(J, 1, psi)
+  y <- matrix(rbinom(J * I, 1, z_true * p), J, I)
+  list(y = y, J = J, I = I)
 }
 
-fit_all_occ <- function(seed, R, T, psi_true, p_true,
+fit_all_occ <- function(seed, J, I, psi_true, p_true,
                         n.chains = 3, n.iter = 5000, n.burnin = 2500, n.thin = 1) {
   gc() # get rid of residual JAGS misery
   set.seed(seed)
-  dat <- sim_data_occ(R, T, psi_true, p_true)
+  dat <- sim_data_occ(J, I, psi_true, p_true)
   y <- dat$y
 
   # ------------------------------------------------------------------
@@ -91,12 +91,12 @@ fit_all_occ <- function(seed, R, T, psi_true, p_true,
   unm_converged <- fit_unm@opt$convergence == 0 && !is.null(se_unm) && all(is.finite(se_unm))
 
   # ------------------------------------------------------------------
-  # JAGS - same dataset, explicit latent z_i sampled by MCMC
+  # JAGS - same dataset, explicit latent z_j sampled by MCMC
   # ------------------------------------------------------------------
   model_file <- file.path(tempdir(), "jags_model_occ.txt")
   writeLines(jags_model_occ, model_file)
 
-  jags_data <- list(y = y, R = R, T = T)
+  jags_data <- list(y = y, J = J, I = I)
   jags_inits <- function() {
     list(
       psi = runif(1, 0.1, 0.9),
@@ -151,15 +151,15 @@ fit_all_occ <- function(seed, R, T, psi_true, p_true,
     psi <- plogis(logit_psi)
     p <- plogis(logit_p)
     nll <- 0
-    for (i in 1:R) {
-      nll <- nll - dbinom(z[i], size = 1, prob = psi, log = TRUE)
-      for (j in 1:T) {
-        nll <- nll - dbinom(y[i, j], size = 1, prob = z[i] * p, log = TRUE)
+    for (j in 1:J) {
+      nll <- nll - dbinom(z[j], size = 1, prob = psi, log = TRUE)
+      for (i in 1:I) {
+        nll <- nll - dbinom(y[j, i], size = 1, prob = z[j] * p, log = TRUE)
       }
     }
     nll
   }
-  par <- list(logit_psi = 0, logit_p = 0, z = rep(1, R))
+  par <- list(logit_psi = 0, logit_p = 0, z = rep(1, J))
 
   time_rtmb <- system.time({
     obj <- tryCatch(
@@ -207,14 +207,14 @@ fit_all_occ <- function(seed, R, T, psi_true, p_true,
   )
 }
 
-run_occupancy <- function(nsim, R, T,
+run_occupancy <- function(nsim, J, I,
                           psi_true, p_true,
                           seed,
                           n.chains, n.iter,
                           n.burnin, n.thin) {
   raw <- vector("list", nsim)
   for (s in 1:nsim) {
-    raw[[s]] <- fit_all_occ(seed + s, R, T, psi_true, p_true,
+    raw[[s]] <- fit_all_occ(seed + s, J, I, psi_true, p_true,
       n.chains = n.chains, n.iter = n.iter,
       n.burnin = n.burnin, n.thin = n.thin
     )
@@ -252,12 +252,12 @@ run_occupancy <- function(nsim, R, T,
     jags_conv_rate = conv_rate,
     rtmb_conv_rate = rtmb_conv_rate,
     unm_conv_rate = unm_conv_rate,
-    nsim = nsim, R = R, T = T
+    nsim = nsim, J = J, I = I
   )
 }
 
 res <- run_occupancy(
-  nsim = nsim, R = R, T = T,
+  nsim = nsim, J = J, I = I,
   psi_true = psi_true, p_true = p_true,
   seed = seed,
   n.chains = n.chains, n.iter = n.iter,

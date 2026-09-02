@@ -1,16 +1,16 @@
 # N-mixture Model (Royle 2004) - Monte Carlo Simulation
 #
 # Ecological process (latent abundance):
-#   N_i ~ Poisson(lambda),  i = 1, ..., R
+#   N_j ~ Poisson(lambda),  j = 1, ..., J
 #
 # Observation process (detection):
-#   y_ij | N_i ~ Binomial(N_i, p),  j = 1, ..., T
+#   y_ji | N_j ~ Binomial(N_j, p),  i = 1, ..., I
 #
 # where:
 #   lambda = expected abundance at each site
 #   p      = probability of detecting an individual
-#   N_i    = true (latent) abundance at site i
-#   y_ij   = count at site i, occasion j
+#   N_j    = true (latent) abundance at site j
+#   y_ji   = count at site j, sample i
 
 library(RTMB)
 library(unmarked)
@@ -21,8 +21,8 @@ library(R2jags)
 nsim <- as.integer(Sys.getenv("NSIM"))
 # set by `make SEED=X`; set seed manually here instead if running standalone
 seed <- as.integer(Sys.getenv("SEED"))
-R <- 100
-T <- 5
+J <- 100
+I <- 5
 lambda_true <- 32
 p_true <- 0.25
 n.chains <- 4
@@ -38,25 +38,25 @@ model {
   p      ~ dunif(0, 1)
 
   # Likelihood
-  for (i in 1:R) {
-    N[i] ~ dpois(lambda)
-    for (j in 1:T) {
-      y[i, j] ~ dbin(p, N[i])
+  for (j in 1:J) {
+    N[j] ~ dpois(lambda)
+    for (i in 1:I) {
+      y[j, i] ~ dbin(p, N[j])
     }
   }
 }
 "
 
-sim_data_nmix <- function(R, T, lambda, p) {
-  N_true <- rpois(R, lambda)
-  y <- matrix(rbinom(R * T, rep(N_true, T), p), R, T)
-  list(y = y, R = R, T = T)
+sim_data_nmix <- function(J, I, lambda, p) {
+  N_true <- rpois(J, lambda)
+  y <- matrix(rbinom(J * I, rep(N_true, I), p), J, I)
+  list(y = y, J = J, I = I)
 }
 
-fit_all_nmix <- function(seed, R, T, lambda_true, p_true,
+fit_all_nmix <- function(seed, J, I, lambda_true, p_true,
                          n.chains = 3, n.iter = 5000, n.burnin = 2500, n.thin = 1) {
   set.seed(seed)
-  dat <- sim_data_nmix(R, T, lambda_true, p_true)
+  dat <- sim_data_nmix(J, I, lambda_true, p_true)
   y <- dat$y
   K <- max(y) * 3 # buffer around K
 
@@ -87,12 +87,12 @@ fit_all_nmix <- function(seed, R, T, lambda_true, p_true,
   unm_converged <- fit_unm@opt$convergence == 0 && !is.null(se_unm) && all(is.finite(se_unm))
 
   # ------------------------------------------------------------------
-  # JAGS - same dataset, N_i sampled explicitly by MCMC
+  # JAGS - same dataset, N_j sampled explicitly by MCMC
   # ------------------------------------------------------------------
   model_file <- file.path(tempdir(), "jags_model_nmix.txt")
   writeLines(jags_model_nmix, model_file)
 
-  jags_data <- list(y = y, R = R, T = T)
+  jags_data <- list(y = y, J = J, I = I)
   jags_inits <- function() {
     list(
       lambda = runif(1, 1, lambda_true * 2),
@@ -145,10 +145,10 @@ fit_all_nmix <- function(seed, R, T, lambda_true, p_true,
   f <- function(par) {
     getAll(par, dat)
     nll <- 0
-    for (i in 1:R) {
-      nll <- nll - dpois(N[i], exp(log_lambda), log = TRUE)
-      for (j in 1:T) {
-        nll <- nll - dbinom(y[i, j], N[i], plogis(logit_p), log = TRUE)
+    for (j in 1:J) {
+      nll <- nll - dpois(N[j], exp(log_lambda), log = TRUE)
+      for (i in 1:I) {
+        nll <- nll - dbinom(y[j, i], N[j], plogis(logit_p), log = TRUE)
       }
     }
     nll
@@ -201,14 +201,14 @@ fit_all_nmix <- function(seed, R, T, lambda_true, p_true,
   )
 }
 
-run_nmixture <- function(nsim, R, T,
+run_nmixture <- function(nsim, J, I,
                          lambda_true, p_true,
                          seed,
                          n.chains, n.iter,
                          n.burnin, n.thin) {
   raw <- vector("list", nsim)
   for (s in 1:nsim) {
-    raw[[s]] <- fit_all_nmix(seed + s, R, T, lambda_true, p_true,
+    raw[[s]] <- fit_all_nmix(seed + s, J, I, lambda_true, p_true,
       n.chains = n.chains, n.iter = n.iter,
       n.burnin = n.burnin, n.thin = n.thin
     )
@@ -247,12 +247,12 @@ run_nmixture <- function(nsim, R, T,
     jags_conv_rate = conv_rate,
     rtmb_conv_rate = rtmb_conv_rate,
     unm_conv_rate = unm_conv_rate,
-    nsim = nsim, R = R, T = T
+    nsim = nsim, J = J, I = I
   )
 }
 
 res <- run_nmixture(
-  nsim = nsim, R = R, T = T,
+  nsim = nsim, J = J, I = I,
   lambda_true = lambda_true, p_true = p_true,
   seed = seed,
   n.chains = n.chains, n.iter = n.iter,
