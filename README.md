@@ -1,8 +1,6 @@
-# Sequential Reduction for Discrete-Valued Latent Variables in RTMB
+# Sequential Reduction for Discrete-Valued Latent Variables in `RTMB`
 
-Christopher L. Cahill, Jim T. Thorson, and Kasper Kristensen
-
-Occupancy and abundance (e.g., N-mixture) models require integrating over discrete latent states. Discrete-valued latent variables also arise in other evolutionary models, e.g., state-switching for species traits in phylogenetic trait imputation. This repository implements them in RTMB using the Sequential Reduction (SR) algorithm to automatically marginalize those states, and compares parameter recovery and runtime against `unmarked` and `JAGS` and also includes new spatial and mixed-type extensions.
+Occupancy and abundance (e.g., N-mixture) models require integrating over discrete latent states. Discrete-valued latent variables also arise in other evolutionary models, e.g., state-switching for species traits in phylogenetic trait imputation. This repository implements them in `RTMB` using the Sequential Reduction (SR) algorithm to automatically marginalize those states, and compares parameter recovery and runtime against `unmarked` and `JAGS` and also includes new spatial and mixed-type extensions.
 
 ## Quick start
 
@@ -53,7 +51,7 @@ y <- matrix(
 )
 ```
 
-**unmarked**
+**`unmarked`**
 
 First, we implement this model using purpose built software via the `unmarked` package:
 
@@ -65,9 +63,9 @@ fit <- occu(~1 ~1, unmarkedFrameOccu(y))
 print(fit)
 ```
 
-**RTMB**
+**`RTMB`**
 
-We now implement the same model using RTMB. For an introduction to RTMB, see the [Introduction vignette](https://cran.r-project.org/web/packages/RTMB/vignettes/RTMB-introduction.html).
+We now implement the same model using `RTMB`. For an introduction to `RTMB`, see the [introduction vignette](https://cran.r-project.org/web/packages/RTMB/vignettes/RTMB-introduction.html).
 
 ``` r
 library(RTMB)
@@ -108,11 +106,11 @@ sdr <- sdreport(obj)                   # get uncertainty
 print(sdr)
 ```
 
-While RTMB requires more code than the corresponding model specified in unmarked, its strength lies in its ability to generalize to more complicated model structures. For example, see Thorson and Kristensen (2024) and the corresponding RTMB code for sparse spatial models at [spacetime-ecologist/spacetime-ecologists-RTMB](https://github.com/spacetime-ecologist/spacetime-ecologists-RTMB) or the open N-mixture with a spatial Gaussian Markov random field (GMRF) specified in the main text.
+While `RTMB` requires more code than `unmarked`, it is able to generalize to more complicated model structures. For example, see Thorson and Kristensen (2024) and the corresponding `RTMB` code for sparse spatial models at [spacetime-ecologist/spacetime-ecologists-RTMB](https://github.com/spacetime-ecologist/spacetime-ecologists-RTMB) or the open N-mixture model with a spatial Gaussian Markov random field (GMRF) specified in the main text.
 
 ## Models
 
-RTMB code for the following models can be found in the repository:
+`RTMB` code for the following models can be found in the repository:
 
 - `models/occupancy.R` — occupancy (MacKenzie et al. 2002)
 - `models/dynamic_occupancy.R` — dynamic occupancy (MacKenzie et al. 2003)
