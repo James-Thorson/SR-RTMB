@@ -228,35 +228,3 @@ plot_estimate_recovery <- function(relbias_long, path = "figures/estimate_recove
   ggsave(path, fig, width = 11, height = 8.5, dpi = 150)
   cat("Estimate recovery plot saved to", path, "\n")
 }
-
-# -----------------------------------------------------------
-# JAGS convergence, written into README.md as a plain-text block (not a
-# markdown table, so a linter can't reformat it) so it always reflects
-# results/*.rds instead of being hand-typed.
-# -----------------------------------------------------------
-
-update_readme_convergence_table <- function(models, path = "README.md") {
-  labels <- paste0(names(models), ":")
-  labels <- formatC(labels, width = -max(nchar(labels)))
-  lines <- sprintf(
-    "%s nsim=%d  Rhat<1.1=%d%%",
-    labels,
-    sapply(models, function(m) m$nsim),
-    round(100 * sapply(models, function(m) m$jags_conv_rate))
-  )
-  block <- paste(c("```", lines, "```"), collapse = "\n")
-
-  readme <- paste(readLines(path), collapse = "\n")
-  # Anchored on the block's own first content line (a fence alone would
-  # also match the closing fence of any earlier, unrelated code block).
-  # Fence lines may carry trailing whitespace after a markdown
-  # reformatter runs, so tolerate that on both fences.
-  pattern <- "(?sm)^```[ \t]*\\n(Occupancy|N-mixture|Dynamic Occupancy|Open N-mixture):.*?\\n```[ \t]*"
-  if (!grepl(pattern, readme, perl = TRUE)) {
-    stop("update_readme_convergence_table(): no matching block found in ", path,
-      " - regex is out of sync with the file, nothing was written")
-  }
-  readme <- sub(pattern, block, readme, perl = TRUE)
-  writeLines(readme, path)
-  cat("Convergence results updated in", path, "\n")
-}

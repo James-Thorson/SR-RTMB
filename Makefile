@@ -1,11 +1,11 @@
-.PHONY: all clean install occupancy dynamic_occupancy nmixture open_nmixture spde phylo plots sequential_reduction
+.PHONY: all clean install occupancy dynamic_occupancy nmixture open_nmixture spde phylo plots sequential_reduction elimination_order_timing
 
 # set global variables that can be passed into all simulation scripts
 NSIM ?= 100
 SEED ?= 11223344
 export NSIM SEED
 
-all: plots spde phylo sequential_reduction
+all: plots spde phylo sequential_reduction elimination_order_timing
 
 # make sure packages are installed
 install:
@@ -39,6 +39,10 @@ plots: occupancy dynamic_occupancy nmixture open_nmixture
 # Figure 1: sequential reduction explainer (base R, no package dependencies)
 sequential_reduction:
 	Rscript R/sequential_reduction.R
+
+# Appendix figure: MakeADFun() construction time, combined (SN) vs separate (S, N) integrate()
+elimination_order_timing: install
+	Rscript R/elimination_order_timing.R
 
 clean:
 	# wipe results and plots

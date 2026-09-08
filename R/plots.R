@@ -64,6 +64,4 @@ plot_timing_violin(timings_long, "figures/timing_violin.png")
 relbias_long <- build_relbias_long(models)
 plot_estimate_recovery(relbias_long, "figures/estimate_recovery.png")
 
-update_readme_convergence_table(models, "README.md")
-
 cat("\nAll figures saved to figures/\n")
