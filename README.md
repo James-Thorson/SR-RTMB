@@ -42,7 +42,6 @@ where $\psi$ is occupancy probability, $p$ is detection probability, $z_j$ is th
 ``` r
 # some fake data
 # y[j,i] = detection/non-detection
-# z[j]   = latent occupancy state
 y <- matrix(
   c(
     1, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 0
@@ -106,7 +105,7 @@ sdr <- sdreport(obj)                   # get uncertainty
 print(sdr)
 ```
 
-While `RTMB` requires more code than `unmarked`, it is able to generalize to more complicated model structures. For example, see Thorson and Kristensen (2024) and the corresponding `RTMB` code for sparse spatial models at [spacetime-ecologist/spacetime-ecologists-RTMB](https://github.com/spacetime-ecologist/spacetime-ecologists-RTMB) or the open N-mixture model with a spatial Gaussian Markov random field (GMRF) specified in the main text.
+While `RTMB` requires more code than `unmarked`, it is able to generalize to more complicated model structures. For example, see Thorson and Kristensen (2024) and the corresponding `RTMB` code for spatial models specified using sparse matrices at [spacetime-ecologist/spacetime-ecologists-RTMB](https://github.com/spacetime-ecologist/spacetime-ecologists-RTMB) or the open N-mixture model with a spatial Gaussian Markov random field (GMRF) specified in the main text.
 
 ## Models
 
